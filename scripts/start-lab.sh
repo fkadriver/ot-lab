@@ -16,9 +16,9 @@ usage() {
 
 start_grfics() {
     echo "[*] Starting GRFICSv3..."
-    if [ ! -d "$LAB_DIR/GRFICSv3" ]; then
-        echo "[*] Cloning GRFICSv3..."
-        git clone https://github.com/Fortiphyd/GRFICSv3 "$LAB_DIR/GRFICSv3"
+    if [ ! -f "$LAB_DIR/GRFICSv3/docker-compose.yml" ]; then
+        echo "[*] Initialising GRFICSv3 submodule..."
+        git -C "$LAB_DIR" submodule update --init GRFICSv3
     fi
     cd "$LAB_DIR/GRFICSv3"
     docker compose up -d
@@ -30,9 +30,9 @@ start_grfics() {
 
 start_labshock() {
     echo "[*] Starting Labshock..."
-    if [ ! -d "$LAB_DIR/labshock" ]; then
-        echo "[*] Cloning Labshock..."
-        git clone https://github.com/zakharb/labshock "$LAB_DIR/labshock"
+    if [ ! -f "$LAB_DIR/labshock/docker-compose.yml" ]; then
+        echo "[*] Initialising labshock submodule..."
+        git -C "$LAB_DIR" submodule update --init labshock
     fi
     cd "$LAB_DIR/labshock"
     docker compose up -d
