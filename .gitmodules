@@ -1,0 +1,6 @@
+[submodule "GRFICSv3"]
+	path = GRFICSv3
+	url = https://github.com/Fortiphyd/GRFICSv3
+[submodule "labshock"]
+	path = labshock
+	url = https://github.com/zakharb/labshock
