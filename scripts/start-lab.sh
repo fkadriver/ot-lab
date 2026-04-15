@@ -21,7 +21,7 @@ start_grfics() {
         git -C "$LAB_DIR" submodule update --init GRFICSv3
     fi
     cd "$LAB_DIR/GRFICSv3"
-    docker compose up -d
+    docker compose -f docker-compose.yml -f "$LAB_DIR/overrides/grfics-override.yml" up -d
     echo "[+] GRFICSv3 started"
     echo "    HMI:                 http://localhost:6081"
     echo "    Engineering WS:      http://localhost:6080"

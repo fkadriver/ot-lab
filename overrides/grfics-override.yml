@@ -1,0 +1,25 @@
+# GRFICSv3 host-specific network override
+# Overrides the macvlan parent interface from the upstream default (eth0)
+# to the actual NIC on this host (enp0s31f6).
+#
+# Docker Compose merges this with docker-compose.yml when passed via -f.
+# The start-lab.sh script handles this automatically.
+
+networks:
+  b-ics-net:
+    driver: macvlan
+    driver_opts:
+      parent: enp0s31f6
+    ipam:
+      config:
+        - subnet: 192.168.95.0/24
+          gateway: 192.168.95.1
+
+  c-dmz-net:
+    driver: macvlan
+    driver_opts:
+      parent: enp0s31f6
+    ipam:
+      config:
+        - subnet: 192.168.90.0/24
+          gateway: 192.168.90.1
