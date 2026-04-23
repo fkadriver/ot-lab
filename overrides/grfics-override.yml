@@ -9,7 +9,7 @@ networks:
   b-ics-net:
     driver: macvlan
     driver_opts:
-      parent: enp0s31f6
+      parent: eth0
     ipam:
       config:
         - subnet: 192.168.95.0/24
@@ -18,7 +18,7 @@ networks:
   c-dmz-net:
     driver: macvlan
     driver_opts:
-      parent: enp0s31f6
+      parent: eth0
     ipam:
       config:
         - subnet: 192.168.90.0/24

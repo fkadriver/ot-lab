@@ -6,11 +6,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 
 usage() {
-    echo "Usage: $0 [grfics|labshock|all]"
+    echo "Usage: $0 [grfics|labshock|all] [--armis]"
     echo ""
     echo "  grfics    Start GRFICSv3 (chemical plant simulation)"
     echo "  labshock  Start Labshock (multi-protocol SCADA)"
     echo "  all       Start both"
+    echo ""
+    echo "Options:"
+    echo "  --armis   Enable Armis network monitoring (requires .env.armis)"
+    echo ""
+    echo "Armis Setup:"
+    echo "  Run ./scripts/armis-setup.sh --api-key YOUR_KEY to configure"
     exit 1
 }
 
@@ -21,11 +27,52 @@ start_grfics() {
         git -C "$LAB_DIR" submodule update --init GRFICSv3
     fi
     cd "$LAB_DIR/GRFICSv3"
-    docker compose -f docker-compose.yml -f "$LAB_DIR/overrides/grfics-override.yml" up -d
+    
+    # Check for Armis integration (via env file or ARMIS_ENABLED flag)
+    local compose_files="-f docker-compose.yml -f $LAB_DIR/overrides/grfics-override.yml"
+    local armis_msg=""
+    local armis_enabled=0
+    
+    if [ "$ARMIS_ENABLED" = "1" ] || [ -f "$LAB_DIR/.env.armis" ]; then
+        if [ -f "$LAB_DIR/.env.armis" ]; then
+            echo "[*] Loading Armis configuration..."
+            set -a  # Auto-export variables from .env.armis
+            source "$LAB_DIR/.env.armis"
+            set +a
+        fi
+        
+        if [ -n "$ARMIS_API_KEY" ]; then
+            armis_enabled=1
+            echo "[*] Armis integration enabled"
+            compose_files="$compose_files -f $LAB_DIR/overrides/armis-monitoring.yml"
+            armis_msg="
+    Armis PCAP Capture:   docker logs -f armis-pcap-capture
+    Armis Uploader:       docker logs -f armis-pcap-uploader"
+            
+            # Pull required images for Armis
+            echo "[*] Pulling Armis monitoring images..."
+            docker pull nicolaka/netshoot:latest 2>/dev/null || true
+            docker pull python:3.10-slim 2>/dev/null || true
+            docker pull rsyslog/rsyslog:latest 2>/dev/null || true
+        else
+            echo "[!] ARMIS_API_KEY not set - skipping Armis"
+        fi
+    fi
+    
+    if [ $armis_enabled -eq 0 ] && [ "$ARMIS_ENABLED" = "1" ]; then
+        echo "[!] ARMIS_ENABLED=1 but no .env.armis found"
+        echo "    Run: ./scripts/armis-setup.sh --api-key YOUR_KEY"
+    fi
+    
+    docker compose $compose_files up -d
     echo "[+] GRFICSv3 started"
     echo "    HMI:                 http://localhost:6081"
     echo "    Engineering WS:      http://localhost:6080"
     echo "    OpenPLC:             http://localhost:8080"
+    
+    if [ -n "$armis_msg" ]; then
+        echo "$armis_msg"
+    fi
 }
 
 start_labshock() {
@@ -40,11 +87,47 @@ start_labshock() {
     echo "    Portal: check docker logs for URL"
 }
 
-case "${1:-all}" in
-    grfics)   start_grfics ;;
-    labshock) start_labshock ;;
-    all)      start_grfics; start_labshock ;;
-    *)        usage ;;
+# Parse arguments
+ENABLE_ARMIS=0
+TARGET="${1:-all}"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --armis)
+            ENABLE_ARMIS=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            TARGET="$1"
+            shift
+            ;;
+    esac
+done
+
+# Execute based on target
+case "$TARGET" in
+    grfics)
+        if [ $ENABLE_ARMIS -eq 1 ]; then
+            export ARMIS_ENABLED=1
+        fi
+        start_grfics
+        ;;
+    labshock)
+        start_labshock
+        ;;
+    all)
+        if [ $ENABLE_ARMIS -eq 1 ]; then
+            export ARMIS_ENABLED=1
+        fi
+        start_grfics
+        start_labshock
+        ;;
+    *)
+        usage
+        ;;
 esac
 
 echo ""

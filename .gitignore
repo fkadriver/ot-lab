@@ -1,0 +1,20 @@
+# API keys and secrets
+.env.*
+*secrets*
+*api-key*
+*apikey*
+
+# Armis collector image (3.5 GB VM disk)
+/opt/armis-collector/
+*.qcow2
+*.ova
+*.vhd
+*.vhdx
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor
+.vscode/
+*.swp

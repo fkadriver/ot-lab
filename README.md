@@ -136,6 +136,64 @@ These tools work primarily via **passive network traffic monitoring** (span port
 
 ---
 
+## Integrating Armis Network Monitor
+
+This lab includes built-in support for **Armis**, a cloud-based agentless network security platform. Armis can analyze your OT traffic in real-time and detect threats across all devices.
+
+### Quick Integration
+
+```bash
+# 1. Get your Armis API credentials
+# - Go to https://lab-kudelski.armis.com
+# - Navigate to Settings > API > Generate Token
+# - Copy your API token
+
+# 2. Run the Armis setup script
+./scripts/armis-setup.sh --api-key "your-api-token"
+
+# 3. Start the lab with Armis monitoring
+cd GRFICSv3
+source ../.env.armis
+docker compose \
+  -f docker-compose.yml \
+  -f ../overrides/grfics-override.yml \
+  -f ../overrides/armis-monitoring.yml \
+  up -d
+```
+
+### What This Does
+
+- **PCAP Capture**: Continuously captures OT protocol traffic (Modbus, S7, EtherNet/IP, OPC-UA, BACnet)
+- **Cloud Analysis**: Uploads captures to Armis cloud for AI-powered device discovery and threat detection
+- **Log Forwarding**: Forwards firewall, IDS, and device logs to Armis for correlation
+- **Device Inventory**: Armis discovers and profiles all PLC/HMI/EWS/engineering tools in your lab
+- **Threat Detection**: Identifies policy violations, anomalies, and known attack signatures
+
+### Supported Integration Methods
+
+See [docs/armis-integration.md](docs/armis-integration.md) for:
+- ✓ PCAP upload to Armis cloud (recommended)
+- ✓ Netflow/sFlow export for network visibility
+- ✓ Syslog integration for event forwarding
+- ✓ Direct API integration for custom correlations
+- ✓ Multi-tenant support
+
+### Example: Detecting a Modbus Attack
+
+```bash
+# Terminal 1: Monitor Armis detections in real-time
+docker logs -f armis-pcap-uploader
+
+# Terminal 2: Trigger an attack from Kali
+docker exec kali mbpoll -a 1 -t 0 -1 192.168.95.2 1
+
+# Terminal 3: Check Armis console
+# Navigate to https://lab-kudelski.armis.com and view Alerts
+# You should see "Unauthorized Modbus Coil Write" detected within 2-5 minutes
+```
+
+---
+
 ## Quick Start
 
 ```bash
@@ -157,6 +215,7 @@ docker network ls
 ```
 
 See [docs/sensor-setup.md](docs/sensor-setup.md) for connecting OT security sensors.
+See [docs/armis-integration.md](docs/armis-integration.md) for Armis-specific setup.
 
 ---
 
