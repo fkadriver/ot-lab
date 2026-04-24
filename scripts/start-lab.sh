@@ -86,10 +86,36 @@ start_grfics() {
     echo "    HMI:                 http://localhost:6081"
     echo "    Engineering WS:      http://localhost:6080"
     echo "    OpenPLC:             http://localhost:8080"
-    
+
+    if [ $armis_enabled -eq 1 ]; then
+        setup_armis_span
+    fi
+
     if [ -n "$armis_msg" ]; then
         echo "$armis_msg"
     fi
+}
+
+# Mirror the router's ICS and DMZ interfaces to its admin interface so the
+# Armis Collector VM (TAP on admin bridge) sees all OT traffic routed through
+# the router. tc rules live in the container netns and must be re-applied
+# after each lab start.
+setup_armis_span() {
+    echo "[*] Setting up Armis SPAN mirrors on router..."
+    # Wait for router to be ready
+    local retries=10
+    while ! docker exec router ip link show eth2 &>/dev/null; do
+        retries=$((retries - 1))
+        [[ $retries -le 0 ]] && echo "[!] Router interfaces not ready — skipping SPAN setup" && return
+        sleep 2
+    done
+
+    for iface in eth0 eth2; do
+        docker exec router tc qdisc add dev "$iface" clsact 2>/dev/null || true
+        docker exec router tc filter replace dev "$iface" ingress protocol all u32 match u32 0 0 action mirred egress mirror dev eth1
+        docker exec router tc filter replace dev "$iface" egress  protocol all u32 match u32 0 0 action mirred egress mirror dev eth1
+    done
+    echo "[*] SPAN mirrors active: eth0+eth2 → eth1 (Armis collector TAP)"
 }
 
 start_labshock() {
