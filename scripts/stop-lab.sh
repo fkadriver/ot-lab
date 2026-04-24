@@ -21,7 +21,12 @@ stop_grfics() {
     fi
     echo "[*] Stopping GRFICSv3..."
     cd "$LAB_DIR/GRFICSv3"
-    docker compose -f docker-compose.yml -f "$LAB_DIR/overrides/grfics-override.yml" down
+    local compose_files="-f docker-compose.yml -f $LAB_DIR/overrides/grfics-override.yml"
+    if [ -f "$LAB_DIR/overrides/armis-monitoring.yml" ] && \
+       docker compose $compose_files -f "$LAB_DIR/overrides/armis-monitoring.yml" ps -q 2>/dev/null | grep -q .; then
+        compose_files="$compose_files -f $LAB_DIR/overrides/armis-monitoring.yml"
+    fi
+    docker compose $compose_files down
     echo "[-] GRFICSv3 stopped"
 }
 

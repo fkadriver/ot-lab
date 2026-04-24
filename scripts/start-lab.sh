@@ -23,11 +23,12 @@ fi
 echo "[*] macvlan parent interface: $MACVLAN_PARENT"
 
 usage() {
-    echo "Usage: $0 [grfics|labshock|all] [--armis]"
+    echo "Usage: $0 [grfics|labshock|all|restart] [--armis]"
     echo ""
     echo "  grfics    Start GRFICSv3 (chemical plant simulation)"
     echo "  labshock  Start Labshock (multi-protocol SCADA)"
-    echo "  all       Start both"
+    echo "  all       Start both (default)"
+    echo "  restart   Stop then start (pass grfics/labshock/all as second arg)"
     echo ""
     echo "Options:"
     echo "  --armis   Enable Armis network monitoring (requires .env.armis)"
@@ -127,20 +128,27 @@ done
 # Execute based on target
 case "$TARGET" in
     grfics)
-        if [ $ENABLE_ARMIS -eq 1 ]; then
-            export ARMIS_ENABLED=1
-        fi
+        if [ $ENABLE_ARMIS -eq 1 ]; then export ARMIS_ENABLED=1; fi
         start_grfics
         ;;
     labshock)
         start_labshock
         ;;
     all)
-        if [ $ENABLE_ARMIS -eq 1 ]; then
-            export ARMIS_ENABLED=1
-        fi
+        if [ $ENABLE_ARMIS -eq 1 ]; then export ARMIS_ENABLED=1; fi
         start_grfics
         start_labshock
+        ;;
+    restart)
+        RESTART_TARGET="${2:-all}"
+        echo "[*] Restarting $RESTART_TARGET..."
+        "$SCRIPT_DIR/stop-lab.sh" "$RESTART_TARGET"
+        if [ $ENABLE_ARMIS -eq 1 ]; then export ARMIS_ENABLED=1; fi
+        case "$RESTART_TARGET" in
+            grfics)  start_grfics ;;
+            labshock) start_labshock ;;
+            *)       start_grfics; start_labshock ;;
+        esac
         ;;
     *)
         usage
