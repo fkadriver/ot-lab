@@ -96,27 +96,40 @@ start_grfics() {
     fi
 }
 
-# Mirror the router's ICS (eth2) and DMZ (eth0) interfaces to its admin
-# interface (eth1) so the Armis Collector VM's TAP on the admin bridge sees
-# all OT traffic routed through the router. Rules live in the container netns
-# and must be re-applied after each lab start.
+# Mirror the router's ICS and DMZ interfaces to its admin interface so the
+# Armis Collector VM's TAP on the admin bridge sees all OT traffic.
+# Interface names (eth0/eth1/eth2) are detected dynamically because Docker
+# can reassign them across restarts.
 setup_armis_span() {
     echo "[*] Setting up Armis SPAN mirrors on router..."
     local retries=10
-    while ! docker exec router ip link show eth2 &>/dev/null 2>&1; do
+    while ! docker exec router ip addr show &>/dev/null 2>&1; do
         retries=$((retries - 1))
-        [[ $retries -le 0 ]] && echo "[!] Router interfaces not ready — skipping SPAN setup" && return
+        [[ $retries -le 0 ]] && echo "[!] Router not ready — skipping SPAN setup" && return
         sleep 2
     done
 
-    for iface in eth0 eth2; do
+    # Detect admin interface by the 172.18.0.0/16 subnet
+    local admin_iface ics_iface dmz_iface
+    admin_iface=$(docker exec router ip -o addr show | awk '/172\.18\./ {print $2}')
+    ics_iface=$(docker exec router ip -o addr show | awk '/192\.168\.95\./ {print $2}')
+    dmz_iface=$(docker exec router ip -o addr show | awk '/192\.168\.90\./ {print $2}')
+
+    if [[ -z "$admin_iface" || -z "$ics_iface" || -z "$dmz_iface" ]]; then
+        echo "[!] Could not detect router interfaces — skipping SPAN setup"
+        echo "    admin=$admin_iface  ics=$ics_iface  dmz=$dmz_iface"
+        return
+    fi
+    echo "[*] Router interfaces: admin=$admin_iface  ics=$ics_iface  dmz=$dmz_iface"
+
+    for iface in "$ics_iface" "$dmz_iface"; do
         docker exec router tc qdisc add dev "$iface" clsact 2>/dev/null || true
         docker exec router tc filter replace dev "$iface" ingress protocol all \
-            u32 match u32 0 0 action mirred egress mirror dev eth1
+            u32 match u32 0 0 action mirred egress mirror dev "$admin_iface"
         docker exec router tc filter replace dev "$iface" egress  protocol all \
-            u32 match u32 0 0 action mirred egress mirror dev eth1
+            u32 match u32 0 0 action mirred egress mirror dev "$admin_iface"
     done
-    echo "[*] SPAN mirrors active: router eth0+eth2 → eth1 (Armis collector TAP)"
+    echo "[*] SPAN mirrors active: $ics_iface+$dmz_iface → $admin_iface (Armis TAP)"
 }
 
 start_labshock() {
