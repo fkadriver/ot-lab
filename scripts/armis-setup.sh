@@ -200,8 +200,8 @@ Documentation:
 
 Troubleshooting:
 - Check PCAP capture: docker logs armis-pcap-capture
-- Check collector status: ./scripts/armis-setup.sh --check-collector 25325
-- Verify API key: source $env_file && ./scripts/armis-setup.sh --check-collector 25325
+- Check collector status: ./scripts/armis-setup.sh --check-collector 8156
+- Verify API key: source $env_file && ./scripts/armis-setup.sh --check-collector 8156
 
 EOF
 }

@@ -23,7 +23,7 @@
 #
 # Collector credentials (needed during browser-based activation):
 #   URL:          https://lab-kudelski.armis.com
-#   Collector ID: 8155
+#   Collector ID: 8156
 #   License key:  2a9d9726e
 #   Web UI user:  config
 #   Web UI pass:  Armis  (change after first login)
@@ -33,7 +33,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 
-COLLECTOR_ID=25325
+COLLECTOR_ID=8156
 COLLECTOR_LICENSE="2a9d9726e"
 COLLECTOR_NAME="GRFICSv3 Lab Collector"
 ARMIS_HOSTNAME="${ARMIS_HOSTNAME:-lab-kudelski.armis.com}"

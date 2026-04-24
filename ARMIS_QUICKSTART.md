@@ -40,7 +40,7 @@ sudo -E ./scripts/armis-collector-setup.sh
 ### Step 4: Verify
 ```bash
 # Collector connected?
-./scripts/armis-setup.sh --check-collector 25325
+./scripts/armis-setup.sh --check-collector 8156
 
 # PCAP capture running?
 docker exec armis-pcap-capture ls -lh /pcap
@@ -98,7 +98,7 @@ export ARMIS_SYSLOG_PORT="6514"
 
 ```bash
 # Collector not connecting?
-./scripts/armis-setup.sh --check-collector 25325
+./scripts/armis-setup.sh --check-collector 8156
 
 # No devices in Armis console?
 # Wait 5-10 min after first traffic, then check:
