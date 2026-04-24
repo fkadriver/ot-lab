@@ -4,7 +4,7 @@
 #
 # Network layout:
 #   enp0s2 — QEMU user-mode NAT (internet → Armis cloud, web UI on :18443)
-#   enp0s3 — macvtap on host eth0 (native on macvlan L2; tc mirrors all OT traffic here)
+#   enp0s3 — TAP on Docker admin bridge (receives tc-mirrored OT traffic)
 #
 # Pre-requisites:
 #   - source .env.armis              (ARMIS_API_KEY must be set)
@@ -34,7 +34,7 @@ COLLECTOR_NAME="GRFICSv3 Lab Collector"
 ARMIS_HOSTNAME="${ARMIS_HOSTNAME:-lab-kudelski.armis.com}"
 IMAGE_DIR="/opt/armis-collector"
 IMAGE_PATH="$IMAGE_DIR/armis-security.qcow2"
-MACVTAP_IFACE="macvtap-armis"
+TAP_IFACE="tap-armis"
 VM_RAM=4096
 VM_CPUS=2
 VNC_PORT=5900
@@ -95,47 +95,34 @@ download_image() {
   info "Download complete."
 }
 
-# ── 4. create macvtap on host's default NIC ───────────────────────────────────
+# ── 4. find docker admin bridge ──────────────────────────────────────────────
 
-setup_macvtap() {
-  # Detect the default-route interface (same parent the Docker macvlan networks use)
-  local parent
-  parent=$(ip route show default | awk '/default/ {print $5; exit}')
-  [[ -n "$parent" ]] || die "Could not determine default network interface"
-
-  # Remove stale TAP-on-bridge interface if leftover from previous setup
-  if ip link show "tap-armis" &>/dev/null; then
-    info "Removing old tap-armis interface..."
-    ip link del "tap-armis" 2>/dev/null || true
-  fi
-
-  if ip link show "$MACVTAP_IFACE" &>/dev/null; then
-    info "macvtap $MACVTAP_IFACE already exists (parent $parent)."
-  else
-    info "Creating macvtap $MACVTAP_IFACE on parent $parent..."
-    ip link add link "$parent" name "$MACVTAP_IFACE" type macvtap mode bridge
-    ip link set "$MACVTAP_IFACE" up
-    ip link set "$MACVTAP_IFACE" promisc on
-    info "macvtap created."
-  fi
-
-  MACVTAP_IFINDEX=$(cat "/sys/class/net/$MACVTAP_IFACE/ifindex")
-  MACVTAP_DEV="/dev/tap${MACVTAP_IFINDEX}"
-  MACVTAP_MAC=$(cat "/sys/class/net/$MACVTAP_IFACE/address")
-  MACVTAP_PARENT="$parent"
-  info "macvtap: dev=$MACVTAP_DEV  mac=$MACVTAP_MAC  parent=$parent"
+find_docker_bridge() {
+  BRIDGE_ID=$(docker network inspect grficsv3_a-grfics-admin --format '{{.Id}}' 2>/dev/null | head -c 12)
+  [[ -n "$BRIDGE_ID" ]] || die "GRFICSv3 admin network not found — is the lab running?"
+  DOCKER_BRIDGE="br-$BRIDGE_ID"
+  ip link show "$DOCKER_BRIDGE" &>/dev/null || die "Bridge interface $DOCKER_BRIDGE not found"
+  info "Docker admin bridge: $DOCKER_BRIDGE (172.18.0.0/16)"
 }
 
-# ── 5. apply tc SPAN mirrors on host ─────────────────────────────────────────
+# ── 5. create tap on docker admin bridge ─────────────────────────────────────
 
-setup_span() {
-  info "Applying tc SPAN mirrors: $MACVTAP_PARENT ingress+egress → $MACVTAP_IFACE"
-  tc qdisc add dev "$MACVTAP_PARENT" clsact 2>/dev/null || true
-  tc filter replace dev "$MACVTAP_PARENT" ingress protocol all \
-    u32 match u32 0 0 action mirred egress mirror dev "$MACVTAP_IFACE"
-  tc filter replace dev "$MACVTAP_PARENT" egress  protocol all \
-    u32 match u32 0 0 action mirred egress mirror dev "$MACVTAP_IFACE"
-  info "SPAN mirrors active."
+setup_tap() {
+  # Clean up any leftover macvtap from previous setup attempt
+  if ip link show "macvtap-armis" &>/dev/null; then
+    info "Removing stale macvtap-armis interface..."
+    ip link del "macvtap-armis" 2>/dev/null || true
+  fi
+
+  if ip link show "$TAP_IFACE" &>/dev/null; then
+    info "TAP interface $TAP_IFACE already exists."
+  else
+    info "Creating TAP interface $TAP_IFACE on $DOCKER_BRIDGE..."
+    ip tuntap add dev "$TAP_IFACE" mode tap
+    ip link set "$TAP_IFACE" up
+    ip link set "$TAP_IFACE" master "$DOCKER_BRIDGE"
+    info "TAP $TAP_IFACE attached to bridge $DOCKER_BRIDGE."
+  fi
 }
 
 # ── 6. launch vm ──────────────────────────────────────────────────────────────
@@ -158,12 +145,8 @@ launch_vm() {
   info "Starting Armis collector VM..."
   info "  RAM: ${VM_RAM}MB  vCPUs: $VM_CPUS"
   info "  enp0s2: user-mode NAT (internet/Armis cloud)"
-  info "  enp0s3: macvtap on $MACVTAP_PARENT (OT traffic capture)"
+  info "  enp0s3: TAP on $DOCKER_BRIDGE (tc-mirrored OT traffic)"
   info "  VNC:  127.0.0.1:$VNC_PORT"
-
-  # Pre-open the macvtap character device; QEMU inherits the fd across daemonize fork
-  local macvtap_fd=20
-  eval "exec ${macvtap_fd}<>\"${MACVTAP_DEV}\""
 
   qemu-system-x86_64 \
     -name "armis-collector" \
@@ -176,15 +159,12 @@ launch_vm() {
     -drive "file=$IMAGE_PATH,format=qcow2,if=virtio,cache=writeback" \
     -netdev "user,id=net0,hostfwd=tcp::18443-:8443" \
     -device "virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56" \
-    -netdev "tap,id=net1,fd=${macvtap_fd},vhost=off" \
-    -device "virtio-net-pci,netdev=net1,mac=${MACVTAP_MAC}" \
+    -netdev "tap,id=net1,ifname=$TAP_IFACE,script=no,downscript=no" \
+    -device "virtio-net-pci,netdev=net1,mac=52:54:00:12:34:57" \
     -serial "file:$IMAGE_DIR/serial.log" \
     -vnc "127.0.0.1:0" \
     -daemonize \
     -pidfile "$IMAGE_DIR/collector.pid"
-
-  # Close our copy of the fd (QEMU daemon keeps its own)
-  eval "exec ${macvtap_fd}>&-"
 
   sleep 3
   local pid
@@ -204,18 +184,15 @@ print_activation() {
 The VM is booting. Allow 2–3 minutes for first boot.
 
 ── Network Layout ───────────────────────────────────────────────────
-  enp0s2  QEMU user-mode NAT — internet / Armis cloud (10.0.2.x)
-  enp0s3  macvtap on $MACVTAP_PARENT — native on OT macvlan networks
-          Assign 192.168.90.x in Armis console (Optional)
-          IP Routing: OFF (passive capture interface)
+  enp0s2  QEMU NAT — internet / Armis cloud (10.0.2.x)
+  enp0s3  TAP on admin bridge — receives tc-mirrored OT traffic
+          IP Routing: OFF  (passive capture interface)
+          No IP address needed
 
 ── Activate the Collector ──────────────────────────────────────────
-1. Open the collector web UI:
-   https://localhost:18443
+1. Open:  https://localhost:18443  (user: config / pass: Armis)
 
-2. Log in:   config / Armis
-
-3. Enter details:
+2. Enter:
    Armis URL:    https://$ARMIS_HOSTNAME
    License Key:  $COLLECTOR_LICENSE
    Collector ID: $COLLECTOR_ID
@@ -223,8 +200,6 @@ The VM is booting. Allow 2–3 minutes for first boot.
 ── Verify ──────────────────────────────────────────────────────────
   source .env.armis
   ./scripts/armis-setup.sh --check-collector $COLLECTOR_ID
-
-  https://$ARMIS_HOSTNAME → Sensors → Collectors → "$COLLECTOR_NAME"
 
 ── Stop / Restart ──────────────────────────────────────────────────
   Stop:    sudo pkill -f "qemu.*-name armis-collector"
@@ -239,7 +214,7 @@ require_root
 install_qemu
 get_token
 download_image
-setup_macvtap
-setup_span
+find_docker_bridge
+setup_tap
 launch_vm
 print_activation

@@ -96,33 +96,27 @@ start_grfics() {
     fi
 }
 
-# Mirror all traffic on the host's macvlan parent interface (eth0) to the
-# macvtap-armis interface so the Armis Collector VM sees all OT network traffic.
-# tc rules are re-applied after each lab start because macvtap-armis only
-# exists while the Collector VM is running.
+# Mirror the router's ICS (eth2) and DMZ (eth0) interfaces to its admin
+# interface (eth1) so the Armis Collector VM's TAP on the admin bridge sees
+# all OT traffic routed through the router. Rules live in the container netns
+# and must be re-applied after each lab start.
 setup_armis_span() {
-    echo "[*] Setting up Armis SPAN mirrors on host..."
-
-    local parent="$MACVLAN_PARENT"
-    local macvtap="macvtap-armis"
-
+    echo "[*] Setting up Armis SPAN mirrors on router..."
     local retries=10
-    while ! ip link show "$macvtap" &>/dev/null; do
+    while ! docker exec router ip link show eth2 &>/dev/null 2>&1; do
         retries=$((retries - 1))
-        if [[ $retries -le 0 ]]; then
-            echo "[!] $macvtap not found — start the Collector VM first with:"
-            echo "    sudo -E ./scripts/armis-collector-setup.sh"
-            return
-        fi
+        [[ $retries -le 0 ]] && echo "[!] Router interfaces not ready — skipping SPAN setup" && return
         sleep 2
     done
 
-    tc qdisc add dev "$parent" clsact 2>/dev/null || true
-    tc filter replace dev "$parent" ingress protocol all \
-        u32 match u32 0 0 action mirred egress mirror dev "$macvtap"
-    tc filter replace dev "$parent" egress  protocol all \
-        u32 match u32 0 0 action mirred egress mirror dev "$macvtap"
-    echo "[*] SPAN mirrors active: $parent ingress+egress → $macvtap"
+    for iface in eth0 eth2; do
+        docker exec router tc qdisc add dev "$iface" clsact 2>/dev/null || true
+        docker exec router tc filter replace dev "$iface" ingress protocol all \
+            u32 match u32 0 0 action mirred egress mirror dev eth1
+        docker exec router tc filter replace dev "$iface" egress  protocol all \
+            u32 match u32 0 0 action mirred egress mirror dev eth1
+    done
+    echo "[*] SPAN mirrors active: router eth0+eth2 → eth1 (Armis collector TAP)"
 }
 
 start_labshock() {
