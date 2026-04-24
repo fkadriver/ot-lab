@@ -65,12 +65,11 @@ start_grfics() {
             compose_files="$compose_files -f $LAB_DIR/overrides/armis-monitoring.yml"
             armis_msg="
     Armis PCAP Capture:   docker logs -f armis-pcap-capture
-    Armis Uploader:       docker logs -f armis-pcap-uploader"
-            
+    Armis Collector VM:   sudo -E ./scripts/armis-collector-setup.sh"
+
             # Pull required images for Armis
             echo "[*] Pulling Armis monitoring images..."
             docker pull nicolaka/netshoot:latest 2>/dev/null || true
-            docker pull python:3.10-slim 2>/dev/null || true
             docker pull rsyslog/rsyslog:latest 2>/dev/null || true
         else
             echo "[!] ARMIS_API_KEY not set - skipping Armis"

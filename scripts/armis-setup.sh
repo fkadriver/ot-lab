@@ -182,24 +182,26 @@ Next Steps:
      -f ../overrides/armis-monitoring.yml \\
      up -d
 
-4. Verify Armis is capturing traffic:
+4. Verify PCAP capture is running:
    docker logs armis-pcap-capture | tail -20
-   docker logs armis-pcap-uploader | tail -20
 
-5. Generate OT traffic to test detection:
-   docker exec kali mbpoll -a 1 -r 1 -c 10 192.168.95.2
+5. Deploy the Armis Collector VM (required for device discovery):
+   sudo -E ./scripts/armis-collector-setup.sh
+   # Then activate at https://localhost:18443 (user: config / pass: Armis)
 
-6. Check Armis console for discovered devices:
+6. Generate OT traffic to test detection:
+   docker exec kali nmap -p 502 --script modbus-discover 192.168.95.2
+
+7. Check Armis console for discovered devices:
    https://$hostname/
 
 Documentation:
 - Full integration guide: $LAB_DIR/docs/armis-integration.md
-- Sensor setup guide: $LAB_DIR/docs/sensor-setup.md
 
 Troubleshooting:
 - Check PCAP capture: docker logs armis-pcap-capture
-- Check uploads: docker logs armis-pcap-uploader
-- Verify API key: curl -H "Authorization: Bearer \$ARMIS_API_KEY" https://$hostname/api/v1/health
+- Check collector status: ./scripts/armis-setup.sh --check-collector 25325
+- Verify API key: source $env_file && ./scripts/armis-setup.sh --check-collector 25325
 
 EOF
 }
