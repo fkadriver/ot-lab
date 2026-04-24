@@ -5,6 +5,23 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 
+# Auto-detect the host's default-route network interface for macvlan parent.
+# Can be overridden by setting MACVLAN_PARENT before running this script.
+detect_macvlan_parent() {
+    local iface
+    iface=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
+    if [[ -z "$iface" ]]; then
+        echo "[!] Could not detect default network interface — using eth0" >&2
+        iface="eth0"
+    fi
+    echo "$iface"
+}
+
+if [[ -z "${MACVLAN_PARENT:-}" ]]; then
+    export MACVLAN_PARENT=$(detect_macvlan_parent)
+fi
+echo "[*] macvlan parent interface: $MACVLAN_PARENT"
+
 usage() {
     echo "Usage: $0 [grfics|labshock|all] [--armis]"
     echo ""

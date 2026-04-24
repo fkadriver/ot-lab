@@ -33,7 +33,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 
-COLLECTOR_ID=8155
+COLLECTOR_ID=25325
 COLLECTOR_LICENSE="2a9d9726e"
 COLLECTOR_NAME="GRFICSv3 Lab Collector"
 ARMIS_HOSTNAME="${ARMIS_HOSTNAME:-lab-kudelski.armis.com}"
@@ -128,11 +128,18 @@ setup_tap() {
 # ── 6. launch vm ─────────────────────────────────────────────────────────────
 
 launch_vm() {
-  # Kill any previous instance
-  if pgrep -f "armis-collector" &>/dev/null; then
+  # Kill any previous QEMU instance (pattern scoped to qemu to avoid matching this script)
+  if pgrep -f "qemu.*-name armis-collector" &>/dev/null; then
     info "Stopping existing collector VM..."
-    pkill -f "armis-collector" || true
+    pkill -f "qemu.*-name armis-collector" || true
     sleep 2
+  elif [[ -f "$IMAGE_DIR/collector.pid" ]]; then
+    pid=$(cat "$IMAGE_DIR/collector.pid")
+    if kill -0 "$pid" 2>/dev/null; then
+      info "Stopping existing collector VM (PID $pid)..."
+      kill "$pid" || true
+      sleep 2
+    fi
   fi
 
   info "Starting Armis collector VM..."
@@ -143,15 +150,18 @@ launch_vm() {
 
   qemu-system-x86_64 \
     -name "armis-collector" \
+    -machine q35 \
     -m "$VM_RAM" \
     -smp "$VM_CPUS" \
     -enable-kvm \
     -cpu host \
+    -drive "if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd" \
     -drive "file=$IMAGE_PATH,format=qcow2,if=virtio,cache=writeback" \
     -netdev "user,id=net0,hostfwd=tcp::18443-:8443" \
     -device "virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56" \
     -netdev "tap,id=net1,ifname=$TAP_IFACE,script=no,downscript=no" \
     -device "virtio-net-pci,netdev=net1,mac=52:54:00:12:34:57" \
+    -serial "file:$IMAGE_DIR/serial.log" \
     -vnc "127.0.0.1:0" \
     -daemonize \
     -pidfile "$IMAGE_DIR/collector.pid"

@@ -15,11 +15,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 GRFICS_DIR="$LAB_DIR/GRFICSv3"
 
-# Default values
-ARMIS_HOSTNAME="lab-kudelski.armis.com"
-ARMIS_API_KEY=""
-ARMIS_TENANT_ID=""
+# Default values — preserve env vars if already set (e.g. from source .env.armis)
+ARMIS_HOSTNAME="${ARMIS_HOSTNAME:-lab-kudelski.armis.com}"
+ARMIS_API_KEY="${ARMIS_API_KEY:-}"
+ARMIS_TENANT_ID="${ARMIS_TENANT_ID:-}"
 SHOW_HELP=0
+CHECK_COLLECTOR_ID=""
 
 # ============================================================================
 # Functions
@@ -45,6 +46,7 @@ Optional:
                            Default: lab-kudelski.armis.com
                            Options: lab-kudelski.armis.com or custom
   --tenant-id ID            Armis tenant ID (optional)
+  --check-collector ID      Check registration status of a collector by ID
   --help                   Show this help message
 
 Examples:
@@ -202,6 +204,57 @@ Troubleshooting:
 EOF
 }
 
+check_collector() {
+    local collector_id="$1"
+    local api_key="${ARMIS_API_KEY:-}"
+    local hostname="${ARMIS_HOSTNAME}"
+
+    [[ -n "$api_key" ]] || { echo "ERROR: ARMIS_API_KEY not set. Run: source .env.armis"; exit 1; }
+
+    echo "[*] Getting access token..."
+    local token
+    token=$(curl -s -X POST \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "secret_key=$api_key" \
+        "https://$hostname/api/v1/access_token/" \
+        | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('access_token',''))" 2>/dev/null)
+
+    [[ -n "$token" ]] || { echo "✗ Failed to get access token"; exit 1; }
+
+    echo "[*] Checking collector $collector_id..."
+    local response
+    response=$(curl -s -w "\n%{http_code}" \
+        -H "Authorization: $token" \
+        "https://$hostname/api/v1/collectors/$collector_id/" 2>/dev/null)
+
+    local http_code body
+    http_code=$(echo "$response" | tail -1)
+    body=$(echo "$response" | head -n -1)
+
+    case $http_code in
+        200)
+            echo "✓ Collector found:"
+            echo "$body" | python3 -c "
+import sys, json
+d = json.load(sys.stdin).get('data', {})
+print(f\"  Name:    {d.get('name', 'N/A')}\")
+print(f\"  Status:  {d.get('status', 'N/A')}\")
+print(f\"  Version: {d.get('version', 'N/A')}\")
+print(f\"  Last seen: {d.get('lastSeen', 'N/A')}\")
+" 2>/dev/null || echo "$body"
+            ;;
+        404)
+            echo "✗ Collector $collector_id not found (not yet registered or wrong ID)"
+            ;;
+        401)
+            echo "✗ Authentication failed — check ARMIS_API_KEY"
+            ;;
+        *)
+            echo "⚠ Unexpected response ($http_code): $body"
+            ;;
+    esac
+}
+
 # ============================================================================
 # Main
 # ============================================================================
@@ -221,6 +274,10 @@ while [[ $# -gt 0 ]]; do
             ARMIS_TENANT_ID="$2"
             shift 2
             ;;
+        --check-collector)
+            CHECK_COLLECTOR_ID="$2"
+            shift 2
+            ;;
         --help)
             SHOW_HELP=1
             shift
@@ -234,6 +291,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 print_banner
+
+if [[ -n "$CHECK_COLLECTOR_ID" ]]; then
+    check_collector "$CHECK_COLLECTOR_ID"
+    exit $?
+fi
 
 if [[ $SHOW_HELP -eq 1 ]] || [[ -z "$ARMIS_API_KEY" ]]; then
     print_usage
