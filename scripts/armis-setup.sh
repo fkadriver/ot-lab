@@ -134,20 +134,12 @@ create_env_file() {
     
     cat > "$env_file" << EOF
 # Armis Integration Configuration
-# Source this file before starting the lab with Armis monitoring:
-#   source .env.armis
-#   docker compose -f docker-compose.yml -f ../overrides/armis-monitoring.yml up -d
+# Loaded automatically by start-lab.sh when this file exists.
+# Usage: ./scripts/start-lab.sh grfics --armis
 
-# Armis API Configuration
 export ARMIS_API_KEY="$api_key"
 export ARMIS_HOSTNAME="$hostname"
-$([ -n "$tenant_id" ] && echo "export ARMIS_TENANT_ID=\"$tenant_id\"" || echo "# export ARMIS_TENANT_ID=\"your-tenant-id\"")
-
-# Optional: Additional settings
-export UPLOAD_INTERVAL="30"      # Seconds between PCAP upload checks
-export ARMIS_SYSLOG_HOST="logs.armis.com"
-export ARMIS_SYSLOG_PORT="6514"
-
+$([ -n "$tenant_id" ] && echo "export ARMIS_TENANT_ID=\"$tenant_id\"" || true)
 EOF
     
     echo "✓ Created $env_file"
@@ -165,43 +157,25 @@ show_next_steps() {
 ║                  Setup Complete!                             ║
 ╚══════════════════════════════════════════════════════════════╝
 
-Your Armis credentials have been saved to: $env_file
+Credentials saved to: $env_file
 
 Next Steps:
 
-1. Navigate to GRFICSv3:
-   cd $GRFICS_DIR
+1. Start the lab with Armis monitoring:
+   ./scripts/start-lab.sh grfics --armis
 
-2. Load Armis environment variables:
-   source $env_file
+2. Launch the Armis collector VM (required for traffic ingestion):
+   ./scripts/armis-collector-setup.sh
+   # Activate at https://localhost:18443 (user: config / pass: Armis)
+   # Collector ID: 8156  Tenant: $hostname
 
-3. Start the lab with Armis monitoring:
-   docker compose \\
-     -f docker-compose.yml \\
-     -f ../overrides/grfics-override.yml \\
-     -f ../overrides/armis-monitoring.yml \\
-     up -d
-
-4. Verify PCAP capture is running:
-   docker logs armis-pcap-capture | tail -20
-
-5. Deploy the Armis Collector VM (required for device discovery):
-   sudo -E ./scripts/armis-collector-setup.sh
-   # Then activate at https://localhost:18443 (user: config / pass: Armis)
-
-6. Generate OT traffic to test detection:
-   docker exec kali nmap -p 502 --script modbus-discover 192.168.95.2
-
-7. Check Armis console for discovered devices:
+3. Check Armis console for discovered devices:
    https://$hostname/
 
-Documentation:
-- Full integration guide: $LAB_DIR/docs/armis-integration.md
-
 Troubleshooting:
-- Check PCAP capture: docker logs armis-pcap-capture
-- Check collector status: ./scripts/armis-setup.sh --check-collector 8156
-- Verify API key: source $env_file && ./scripts/armis-setup.sh --check-collector 8156
+- Collector status:  ./scripts/armis-setup.sh --check-collector 8156
+- Monitoring logs:   docker logs armis-pcap-capture
+- Serial console:    tail -f /opt/armis-collector/serial.log
 
 EOF
 }
@@ -315,14 +289,8 @@ if ! validate_hostname "$ARMIS_HOSTNAME"; then
     echo "    Continuing anyway..."
 fi
 
-# Test connection
-if ! test_armis_api "$ARMIS_API_KEY" "$ARMIS_HOSTNAME"; then
-    read -p "Continue without verified connection? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-fi
+# Test connection (non-blocking — DNS may be unavailable in air-gapped or VPN-only setups)
+test_armis_api "$ARMIS_API_KEY" "$ARMIS_HOSTNAME" || echo "[!] Continuing without verified connection — credentials saved anyway"
 
 # Create environment file
 echo "[*] Creating configuration file..."
@@ -331,9 +299,6 @@ create_env_file "$ARMIS_API_KEY" "$ARMIS_HOSTNAME" "$ARMIS_TENANT_ID"
 # Show next steps
 show_next_steps "$ARMIS_API_KEY" "$ARMIS_HOSTNAME"
 
-echo ""
-echo "To get started right now, run:"
-echo "  cd $GRFICS_DIR"
-echo "  source ../.env.armis"
-echo "  docker compose -f docker-compose.yml -f ../overrides/grfics-override.yml -f ../overrides/armis-monitoring.yml up -d"
+echo "To get started right now:"
+echo "  ./scripts/start-lab.sh grfics --armis"
 echo ""
