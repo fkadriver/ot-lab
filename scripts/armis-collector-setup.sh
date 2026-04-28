@@ -14,7 +14,8 @@
 # Usage:
 #   cd /home/sjensen/git/ot-lab
 #   source .env.armis
-#   sudo -E ./scripts/armis-collector-setup.sh
+#   sudo -E ./scripts/armis-collector-setup.sh           # full setup
+#   sudo -E ./scripts/armis-collector-setup.sh --restart # restart VM only
 #
 # Collector credentials (needed during browser-based activation):
 #   URL:          https://lab-kudelski.armis.com
@@ -38,6 +39,16 @@ TAP_IFACE="tap-armis"
 VM_RAM=4096
 VM_CPUS=2
 VNC_PORT=5900
+RESTART_ONLY=0
+
+# ── arg parsing ───────────────────────────────────────────────────────────────
+
+for arg in "$@"; do
+  case "$arg" in
+    --restart) RESTART_ONLY=1 ;;
+    *) die "Unknown argument: $arg" ;;
+  esac
+done
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -84,6 +95,8 @@ download_image() {
     return
   fi
 
+  get_token
+
   info "Fetching signed download URL..."
   IMAGE_URL=$(curl -s -H "Authorization: $TOKEN" \
     "https://$ARMIS_HOSTNAME/api/v1/collectors/_image/?deploymentType=QCOW2" \
@@ -108,14 +121,16 @@ find_docker_bridge() {
 # ── 5. create tap on docker admin bridge ─────────────────────────────────────
 
 setup_tap() {
-  # Clean up any leftover macvtap from previous setup attempt
-  if ip link show "macvtap-armis" &>/dev/null; then
-    info "Removing stale macvtap-armis interface..."
-    ip link del "macvtap-armis" 2>/dev/null || true
-  fi
-
   if ip link show "$TAP_IFACE" &>/dev/null; then
-    info "TAP interface $TAP_IFACE already exists."
+    local current_master
+    current_master=$(ip -o link show "$TAP_IFACE" 2>/dev/null | grep -o 'master [^ ]*' | awk '{print $2}')
+    if [[ "$current_master" != "$DOCKER_BRIDGE" ]]; then
+      info "Re-attaching $TAP_IFACE to $DOCKER_BRIDGE (was: ${current_master:-none})..."
+      ip link set "$TAP_IFACE" master "$DOCKER_BRIDGE"
+      ip link set "$TAP_IFACE" up
+    else
+      info "TAP $TAP_IFACE already on $DOCKER_BRIDGE."
+    fi
   else
     info "Creating TAP interface $TAP_IFACE on $DOCKER_BRIDGE..."
     ip tuntap add dev "$TAP_IFACE" mode tap
@@ -126,6 +141,17 @@ setup_tap() {
 }
 
 # ── 6. launch vm ──────────────────────────────────────────────────────────────
+
+setup_ovmf_vars() {
+  local vars_src="/usr/share/OVMF/OVMF_VARS.fd"
+  local vars_dst="$IMAGE_DIR/ovmf_vars.fd"
+  if [[ ! -f "$vars_dst" ]]; then
+    info "Creating writable OVMF VARS copy at $vars_dst..."
+    cp "$vars_src" "$vars_dst"
+    chmod 600 "$vars_dst"
+  fi
+  OVMF_VARS="$vars_dst"
+}
 
 launch_vm() {
   if pgrep -f "qemu.*-name armis-collector" &>/dev/null; then
@@ -142,6 +168,8 @@ launch_vm() {
     fi
   fi
 
+  setup_ovmf_vars
+
   info "Starting Armis collector VM..."
   info "  RAM: ${VM_RAM}MB  vCPUs: $VM_CPUS"
   info "  enp0s2: user-mode NAT (internet/Armis cloud)"
@@ -155,13 +183,15 @@ launch_vm() {
     -smp "$VM_CPUS" \
     -enable-kvm \
     -cpu host \
-    -drive "if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd" \
+    -drive "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.fd" \
+    -drive "if=pflash,format=raw,file=$OVMF_VARS" \
     -drive "file=$IMAGE_PATH,format=qcow2,if=virtio,cache=writeback" \
     -netdev "user,id=net0,hostfwd=tcp::18443-:8443" \
     -device "virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56" \
     -netdev "tap,id=net1,ifname=$TAP_IFACE,script=no,downscript=no" \
     -device "virtio-net-pci,netdev=net1,mac=52:54:00:12:34:57" \
     -serial "file:$IMAGE_DIR/serial.log" \
+    -monitor "unix:$IMAGE_DIR/monitor.sock,server,nowait" \
     -vnc "127.0.0.1:0" \
     -daemonize \
     -pidfile "$IMAGE_DIR/collector.pid"
@@ -201,9 +231,13 @@ The VM is booting. Allow 2–3 minutes for first boot.
   source .env.armis
   ./scripts/armis-setup.sh --check-collector $COLLECTOR_ID
 
+── Debug ────────────────────────────────────────────────────────────
+  Monitor: sudo socat - UNIX-CONNECT:/opt/armis-collector/monitor.sock
+  Serial:  tail -f /opt/armis-collector/serial.log
+
 ── Stop / Restart ──────────────────────────────────────────────────
   Stop:    sudo pkill -f "qemu.*-name armis-collector"
-  Restart: sudo -E ./scripts/armis-collector-setup.sh
+  Restart: sudo -E ./scripts/armis-collector-setup.sh --restart
 
 EOF
 }
@@ -211,10 +245,17 @@ EOF
 # ── main ─────────────────────────────────────────────────────────────────────
 
 require_root
-install_qemu
-get_token
-download_image
-find_docker_bridge
-setup_tap
-launch_vm
-print_activation
+if [[ $RESTART_ONLY -eq 1 ]]; then
+  [[ -f "$IMAGE_PATH" ]] || die "Image not found at $IMAGE_PATH — run without --restart for initial setup"
+  find_docker_bridge
+  setup_tap
+  launch_vm
+  print_activation
+else
+  install_qemu
+  download_image
+  find_docker_bridge
+  setup_tap
+  launch_vm
+  print_activation
+fi

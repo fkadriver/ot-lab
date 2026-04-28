@@ -23,12 +23,13 @@ fi
 echo "[*] macvlan parent interface: $MACVLAN_PARENT"
 
 usage() {
-    echo "Usage: $0 [grfics|labshock|all|restart] [--armis]"
+    echo "Usage: $0 [grfics|labshock|all|restart|reset] [--armis]"
     echo ""
     echo "  grfics    Start GRFICSv3 (chemical plant simulation)"
     echo "  labshock  Start Labshock (multi-protocol SCADA)"
     echo "  all       Start both (default)"
     echo "  restart   Stop then start (pass grfics/labshock/all as second arg)"
+    echo "  reset     Wipe all persistent data then start fresh"
     echo ""
     echo "Options:"
     echo "  --armis   Enable Armis network monitoring (requires .env.armis)"
@@ -96,11 +97,41 @@ start_grfics() {
     fi
 }
 
+# Re-attach tap-armis to the current admin bridge after a lab restart.
+# Docker assigns a new bridge ID each time compose recreates the network.
+reattach_armis_tap() {
+    local tap="tap-armis"
+    if ! ip link show "$tap" &>/dev/null; then
+        return  # TAP not present; armis-collector-setup.sh will create it on next run
+    fi
+
+    local bridge_id bridge
+    bridge_id=$(docker network inspect grficsv3_a-grfics-admin --format '{{.Id}}' 2>/dev/null | cut -c1-12)
+    if [[ -z "$bridge_id" ]]; then
+        echo "[!] Admin bridge not found — cannot re-attach $tap"
+        return
+    fi
+    bridge="br-$bridge_id"
+
+    local current_master
+    current_master=$(ip -o link show "$tap" 2>/dev/null | grep -o 'master [^ ]*' | awk '{print $2}')
+    if [[ "$current_master" == "$bridge" ]]; then
+        echo "[*] $tap already on $bridge — no change needed"
+        return
+    fi
+
+    echo "[*] Re-attaching $tap to $bridge (was: ${current_master:-none})..."
+    sudo ip link set "$tap" master "$bridge"
+    sudo ip link set "$tap" up
+    echo "[*] $tap attached to $bridge"
+}
+
 # Mirror the router's ICS and DMZ interfaces to its admin interface so the
 # Armis Collector VM's TAP on the admin bridge sees all OT traffic.
 # Interface names (eth0/eth1/eth2) are detected dynamically because Docker
 # can reassign them across restarts.
 setup_armis_span() {
+    reattach_armis_tap
     echo "[*] Setting up Armis SPAN mirrors on router..."
     local retries=10
     while ! docker exec router ip addr show &>/dev/null 2>&1; do
@@ -184,6 +215,17 @@ case "$TARGET" in
         "$SCRIPT_DIR/stop-lab.sh" "$RESTART_TARGET"
         if [ $ENABLE_ARMIS -eq 1 ]; then export ARMIS_ENABLED=1; fi
         case "$RESTART_TARGET" in
+            grfics)  start_grfics ;;
+            labshock) start_labshock ;;
+            *)       start_grfics; start_labshock ;;
+        esac
+        ;;
+    reset)
+        RESET_TARGET="${2:-all}"
+        echo "[!] Resetting $RESET_TARGET — all persistent data will be wiped"
+        "$SCRIPT_DIR/stop-lab.sh" "$RESET_TARGET" --wipe
+        if [ $ENABLE_ARMIS -eq 1 ]; then export ARMIS_ENABLED=1; fi
+        case "$RESET_TARGET" in
             grfics)  start_grfics ;;
             labshock) start_labshock ;;
             *)       start_grfics; start_labshock ;;
