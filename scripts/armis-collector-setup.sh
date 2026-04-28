@@ -26,6 +26,8 @@
 
 set -euo pipefail
 
+if [[ $EUID -ne 0 ]]; then exec sudo -E "$0" "$@"; fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 
@@ -55,9 +57,7 @@ done
 die()  { echo "ERROR: $*" >&2; exit 1; }
 info() { echo "[*] $*"; }
 
-require_root() {
-  [[ $EUID -ne 0 ]] && exec sudo -E "$0" "$@"
-}
+require_root() { :; }
 
 # ── 1. install qemu ───────────────────────────────────────────────────────────
 

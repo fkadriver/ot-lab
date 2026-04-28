@@ -2,7 +2,7 @@
 # start-lab.sh - Start OT lab components
 set -e
 
-[[ $EUID -ne 0 ]] && exec sudo -E "$0" "$@"
+if [[ $EUID -ne 0 ]]; then exec sudo -E "$0" "$@"; fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
