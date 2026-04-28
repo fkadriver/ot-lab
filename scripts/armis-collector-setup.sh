@@ -56,7 +56,7 @@ die()  { echo "ERROR: $*" >&2; exit 1; }
 info() { echo "[*] $*"; }
 
 require_root() {
-  [[ $EUID -eq 0 ]] || die "Run with sudo -E ./scripts/armis-collector-setup.sh"
+  [[ $EUID -ne 0 ]] && exec sudo -E "$0" "$@"
 }
 
 # ── 1. install qemu ───────────────────────────────────────────────────────────

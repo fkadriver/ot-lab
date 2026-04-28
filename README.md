@@ -89,7 +89,7 @@ source .env.armis
 ./scripts/start-lab.sh all --siem --armis
 
 # Start the Armis collector VM (first time or after host reboot)
-sudo -E ./scripts/armis-collector-setup.sh
+./scripts/armis-collector-setup.sh
 ```
 
 ---
@@ -130,10 +130,10 @@ source .env.armis
 ./scripts/start-lab.sh grfics --armis
 
 # Start collector VM (required after host reboot)
-sudo -E ./scripts/armis-collector-setup.sh
+./scripts/armis-collector-setup.sh
 
 # Restart collector VM only
-sudo -E ./scripts/armis-collector-setup.sh --restart
+./scripts/armis-collector-setup.sh --restart
 ```
 
 **Collector VM details:**
