@@ -1,239 +1,182 @@
 # OT/ICS Cybersecurity Lab
 
-A personal OT/ICS security lab for testing and evaluating cybersecurity tools (Claroty, Armis, Nozomi, Dragos) against realistic industrial control system simulations.
-
-## Lab Goals
-
-- Simulate realistic OT/ICS environments with real industrial protocols
-- Generate OT traffic for passive monitoring/detection tools
-- Test OT security platforms (Claroty, Armis, Nozomi, Dragos) in a safe environment
-- Leverage existing SANS ICS course materials
+A personal OT/ICS security lab for testing and evaluating cybersecurity tools against realistic industrial control system simulations.
 
 ---
 
-## Recommended Lab Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Host Machine                        │
-│                                                      │
-│  ┌─────────────────────┐  ┌──────────────────────┐  │
-│  │   GRFICSv3 (Docker) │  │  Labshock (Docker)   │  │
-│  │  - Chemical Plant   │  │  - SCADA/PLC/HMI     │  │
-│  │  - OpenPLC          │  │  - Modbus/S7/OPC UA  │  │
-│  │  - HMI (ScadaBR)   │  │  - BACnet/MQTT/EtIP  │  │
-│  │  - Kali + Caldera   │  │  - EWS/Pentest tools │  │
-│  │  - Suricata IDS     │  │                      │  │
-│  └──────────┬──────────┘  └──────────┬───────────┘  │
-│             │                        │               │
-│  ┌──────────▼────────────────────────▼───────────┐  │
-│  │          OT Network Bridge (Docker)            │  │
-│  │    Protocols: Modbus, S7, EtherNet/IP,        │  │
-│  │    OPC-UA, BACnet, DNP3, MQTT                 │  │
-│  └──────────────────────┬────────────────────────┘  │
-│                         │                            │
-│  ┌──────────────────────▼────────────────────────┐  │
-│  │        OT Security Sensor (SPAN port)          │  │
-│  │   Claroty / Nozomi / Dragos / Armis sensor     │  │
-│  └───────────────────────────────────────────────┘  │
-│                                                      │
-│  ┌───────────────────────────────────────────────┐  │
-│  │   SANS ICS310 RELICS VM (VMware)               │  │
-│  │   Windows 10 - ICS tooling & scenarios         │  │
-│  │   Source: ~/Documents/SANS/ICS/310/            │  │
-│  └───────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                          Host Machine                           │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                   GRFICSv3 (Docker)                     │   │
+│  │                                                         │   │
+│  │  OpenPLC ── Simulation ── ScadaLTS ── Engineering WS   │   │
+│  │      │           │                                      │   │
+│  │  ICS Net (192.168.95.0/24)   DMZ Net (192.168.90.0/24) │   │
+│  │      └───────── Router ────────── Kali + Caldera ───┘  │   │
+│  │                    │                                    │   │
+│  │            Admin Bridge (172.18.0.0/16)                │   │
+│  │                    │                                    │   │
+│  │          Wazuh SIEM (optional --siem)                  │   │
+│  └────────────────────┼───────────────────────────────────┘   │
+│                        │ tc SPAN mirror                         │
+│  ┌─────────────────────▼─────────────────────────────────┐    │
+│  │        Armis Collector VM / QCOW2 (optional --armis)   │    │
+│  │        Passive capture → lab-kudelski.armis.com        │    │
+│  └────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │              Labshock (Docker, optional)                  │  │
+│  │   Multi-protocol SCADA: Modbus/S7/OPC-UA/BACnet/MQTT    │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Lab Components
+## Components
 
-### 1. GRFICSv3 (Primary — Recommended)
+### GRFICSv3 — Chemical Plant Simulation
 
 **Repo:** https://github.com/Fortiphyd/GRFICSv3  
-**Type:** Docker Compose  
-**Deploy:** `docker compose up -d`
+**Protocols:** Modbus TCP, EtherNet/IP
 
-A free, open-source OT security lab simulating a chemical plant with realistic process dynamics.
+Simulates a Tennessee Eastman chemical process with a full ICS stack:
 
-**Components:**
-- OpenPLC (port 8080)
-- HMI / ScadaBR (port 6081)
-- Engineering Workstation (port 6080)
-- Segmented network (DMZ / ICS zones) with router/firewall
-- Kali Linux attacker VM with MITRE Caldera OT plugin
-- Suricata IDS
+| Service | URL | Notes |
+|---|---|---|
+| OpenPLC (PLC runtime) | http://localhost:8080 | `openplc` / `openplc` |
+| ScadaLTS (HMI) | http://localhost:6081 | `admin` / `admin` |
+| Engineering WS | http://localhost:6080 | |
+| Caldera C2 | http://localhost:8888 | `red` / `fortiphyd-red` |
 
-**Protocols:** Modbus TCP, EtherNet/IP  
-**Best for:** Generating realistic ICS traffic for passive monitoring tools (Claroty, Nozomi, Dragos)
+**Optional add-ons:**
 
----
+| Flag | Add-on | URL |
+|---|---|---|
+| `--siem` | Wazuh SIEM (Manager + Indexer + Dashboard) | http://localhost:5601 — `admin` / `admin` |
+| `--armis` | Armis vSensor collector VM | https://localhost:18443 — `config` / `Armis` |
 
-### 2. Labshock (Protocol Breadth)
+### Labshock — Protocol Breadth
 
 **Repo:** https://github.com/zakharb/labshock  
-**Type:** Docker Compose  
-**Deploy:** `docker compose up -d`
+**Protocols:** Modbus RTU/TCP, S7comm, EtherNet/IP, BACnet IP, OPC UA, MQTT
 
-A quick-start OT lab with broader protocol coverage than GRFICSv3.
-
-**Components:**
-- Portal (lab management UI)
-- SCADA (multi-protocol)
-- PLC (full IEC 61131-3 support)
-- Engineering Workstation
-- Pentest Fury (offensive tools)
-- Network Swiftness (traffic monitor)
-- Tidal Collector (SIEM forwarding)
-- Firewall simulation
-- IT/OT Transfer scenarios
-
-**Protocols:** Modbus RTU/TCP, EtherNet/IP, BACnet IP, OPC UA, MQTT, S7comm, WebAPI  
-**Limitations:** Trial mode = 40-min sessions (free); license required for persistent use  
-**Best for:** Protocol variety testing, S7/BACnet/OPC-UA coverage
-
----
-
-### 3. SANS ICS310 RELICS VM (Already Available)
-
-**Location:** `~/Documents/SANS/ICS/310/310.25.1.iso` (7.9 GB)  
-**Type:** VMware VM (Windows 10)  
-**Login:** `relics` / `relics`
-
-Pre-built Windows 10 VM from SANS ICS310 course with ICS security tools and lab scenarios already configured. Does not require any additional downloads.
-
-**Best for:** Hands-on ICS analysis exercises, reusing SANS course labs
-
----
-
-### 4. Conpot (Honeypot / Device Emulation)
-
-**Install:** `pip install conpot`  
-**Type:** Python-based ICS honeypot
-
-Emulates real ICS device fingerprints (Siemens S7-200, etc.) to generate realistic device discovery responses.
-
-**Protocols:** Modbus, S7comm, BACnet, EtherNet/IP  
-**Best for:** Testing asset discovery features in Claroty/Nozomi/Dragos
-
----
-
-## Testing OT Security Tools (Claroty / Armis / Nozomi / Dragos)
-
-These tools work primarily via **passive network traffic monitoring** (span port / network tap). To test them:
-
-1. **Deploy GRFICSv3** to generate realistic Modbus/EtherNet/IP traffic
-2. **Deploy Labshock** alongside for S7, OPC-UA, BACnet traffic
-3. **Connect the sensor** — most tools offer a virtual sensor/probe VM or Docker image:
-   - Point it at the Docker bridge network (`docker network inspect`)
-   - Or configure a Linux bridge with traffic mirroring (`tc mirred` or `iptables TEE`)
-4. **Run attack scenarios** using GRFICSv3's built-in Kali + Caldera to generate alerts
-5. **Validate detections** — check that the tool detects:
-   - Device inventory (PLCs, HMIs, EWS)
-   - Protocol anomalies
-   - Known attack signatures (Modbus coil writes, unauthorized engineering commands)
-
----
-
-## Integrating Armis Network Monitor
-
-This lab includes built-in support for **Armis**, a cloud-based agentless network security platform. Armis can analyze your OT traffic in real-time and detect threats across all devices.
-
-### Quick Integration
-
-```bash
-# 1. Get your Armis API credentials
-# - Go to https://lab-kudelski.armis.com
-# - Navigate to Settings > API > Generate Token
-# - Copy your API token
-
-# 2. Run the Armis setup script
-./scripts/armis-setup.sh --api-key "your-api-token"
-
-# 3. Start the lab with Armis monitoring
-cd GRFICSv3
-source ../.env.armis
-docker compose \
-  -f docker-compose.yml \
-  -f ../overrides/grfics-override.yml \
-  -f ../overrides/armis-monitoring.yml \
-  up -d
-```
-
-### What This Does
-
-- **PCAP Capture**: Continuously captures OT protocol traffic (Modbus, S7, EtherNet/IP, OPC-UA, BACnet)
-- **Cloud Analysis**: Uploads captures to Armis cloud for AI-powered device discovery and threat detection
-- **Log Forwarding**: Forwards firewall, IDS, and device logs to Armis for correlation
-- **Device Inventory**: Armis discovers and profiles all PLC/HMI/EWS/engineering tools in your lab
-- **Threat Detection**: Identifies policy violations, anomalies, and known attack signatures
-
-### Supported Integration Methods
-
-See [docs/armis-integration.md](docs/armis-integration.md) for:
-- ✓ PCAP upload to Armis cloud (recommended)
-- ✓ Netflow/sFlow export for network visibility
-- ✓ Syslog integration for event forwarding
-- ✓ Direct API integration for custom correlations
-- ✓ Multi-tenant support
-
-### Example: Detecting a Modbus Attack
-
-```bash
-# Terminal 1: Monitor Armis detections in real-time
-docker logs -f armis-pcap-uploader
-
-# Terminal 2: Trigger an attack from Kali
-docker exec kali mbpoll -a 1 -t 0 -1 192.168.95.2 1
-
-# Terminal 3: Check Armis console
-# Navigate to https://lab-kudelski.armis.com and view Alerts
-# You should see "Unauthorized Modbus Coil Write" detected within 2-5 minutes
-```
+Broader protocol coverage than GRFICSv3. Trial mode limits sessions to 40 minutes.
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Clone GRFICSv3
-git clone https://github.com/Fortiphyd/GRFICSv3
-cd GRFICSv3
-docker compose up -d
+git clone --recursive https://github.com/fkadriver/ot-lab
+cd ot-lab
 
-# 2. Clone Labshock
-git clone https://github.com/zakharb/labshock
-cd labshock
-docker compose up -d
+# GRFICSv3 only
+./scripts/start-lab.sh grfics
 
-# 3. Check running containers
-docker ps
+# GRFICSv3 + Wazuh SIEM
+./scripts/start-lab.sh grfics --siem
 
-# 4. List Docker networks (for sensor attachment)
-docker network ls
+# GRFICSv3 + Armis collector
+source .env.armis
+./scripts/start-lab.sh grfics --armis
+
+# Everything
+./scripts/start-lab.sh all --siem --armis
+
+# Start the Armis collector VM (first time or after host reboot)
+sudo -E ./scripts/armis-collector-setup.sh
 ```
-
-See [docs/sensor-setup.md](docs/sensor-setup.md) for connecting OT security sensors.
-See [docs/armis-integration.md](docs/armis-integration.md) for Armis-specific setup.
 
 ---
 
-## SANS Courses Available
+## Lab Management
 
-| Course | Description | VM Available |
-|--------|-------------|--------------|
-| ICS310 | ICS Security Essentials (Blue Team) | Yes — RELICS VM (7.9GB ISO) |
-| ICS418 | ICS Red Team Operations | No VM (curriculum only) |
-| ICS410 | ICS/SCADA Security Essentials | No VM (audio only) |
+```bash
+# Start
+./scripts/start-lab.sh [grfics|labshock|all] [--siem] [--armis]
+
+# Stop (keeps all data)
+./scripts/stop-lab.sh [grfics|labshock|all]
+
+# Restart (keeps data)
+./scripts/start-lab.sh restart [grfics|labshock|all] [--siem] [--armis]
+
+# Reset — wipe all volumes and start fresh
+./scripts/start-lab.sh reset [grfics|labshock|all] [--siem] [--armis]
+
+# Stop and wipe volumes only (no restart)
+./scripts/stop-lab.sh [grfics|labshock|all] --wipe
+```
+
+**What `--wipe` clears:** ScadaLTS historian DB, PLC state, router config, Armis PCAPs/flow stats, Wazuh indexes, Labshock portal data, Armis VM UEFI state. Does **not** delete the Armis QCOW2 image.
+
+---
+
+## Armis Integration
+
+The Armis vSensor collector VM receives a tc-mirrored copy of all ICS/DMZ traffic from the router and sends it to `lab-kudelski.armis.com` for cloud analysis.
+
+```bash
+# One-time setup
+./scripts/armis-setup.sh --api-key "your-api-token"
+
+# Start lab with Armis
+source .env.armis
+./scripts/start-lab.sh grfics --armis
+
+# Start collector VM (required after host reboot)
+sudo -E ./scripts/armis-collector-setup.sh
+
+# Restart collector VM only
+sudo -E ./scripts/armis-collector-setup.sh --restart
+```
+
+**Collector VM details:**
+- Web UI: https://localhost:18443 (`config` / `Armis`)
+- Collector ID: 8156 — Tenant: lab-kudelski.armis.com
+- SPAN mirrors on router are re-applied automatically by `start-lab.sh --armis`
+
+---
+
+## Wazuh SIEM
+
+Wazuh is bundled as an optional all-in-one container (Manager + OpenSearch Indexer + Dashboard). Wazuh agents are pre-installed on the router (Suricata/Quickdraw ICS alerts) and ScadaLTS (Tomcat/MariaDB logs).
+
+```bash
+./scripts/start-lab.sh grfics --siem
+# Dashboard: http://localhost:5601  (admin / admin)
+```
+
+**What's monitored out of the box:**
+- Router: Suricata IDS alerts with DigitalBond Quickdraw ICS/SCADA signatures (Modbus, DNP3, EtherNet/IP)
+- ScadaLTS: Tomcat access/error logs, MariaDB error logs
+
+---
+
+## Attack Scenarios
+
+Caldera with the Modbus OT plugin is pre-installed in the GRFICSv3 `caldera` container. The `Attack1` adversary profile runs a Modbus-based attack chain against the PLC.
+
+```bash
+# Caldera UI
+open http://localhost:8888   # red / fortiphyd-red
+
+# Manual Modbus attack from Kali
+docker exec kali mbpoll -a 1 -t 0 -1 192.168.95.2 1
+```
 
 ---
 
 ## Resources
 
-- [SANS ICS Curriculum](https://www.sans.org/ics-security/)
-- [GRFICSv3 GitHub](https://github.com/Fortiphyd/GRFICSv3)
-- [Labshock GitHub](https://github.com/zakharb/labshock)
+- [GRFICSv3](https://github.com/Fortiphyd/GRFICSv3)
+- [Labshock](https://github.com/zakharb/labshock)
 - [MITRE ATT&CK for ICS](https://attack.mitre.org/matrices/ics/)
-- [ICS-CERT Advisories](https://www.cisa.gov/ics-advisories)
-- [OpenPLC Runtime](https://autonomylogic.com/)
+- [Wazuh Documentation](https://documentation.wazuh.com/)
+- [DigitalBond Quickdraw Rules](https://github.com/digitalbond/Quickdraw-Snort)
+- [CISA ICS Advisories](https://www.cisa.gov/ics-advisories)
