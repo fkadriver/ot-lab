@@ -23,7 +23,7 @@ fi
 echo "[*] macvlan parent interface: $MACVLAN_PARENT"
 
 usage() {
-    echo "Usage: $0 [grfics|labshock|all|restart|reset] [--armis]"
+    echo "Usage: $0 [grfics|labshock|all|restart|reset] [--armis] [--siem]"
     echo ""
     echo "  grfics    Start GRFICSv3 (chemical plant simulation)"
     echo "  labshock  Start Labshock (multi-protocol SCADA)"
@@ -33,6 +33,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  --armis   Enable Armis network monitoring (requires .env.armis)"
+    echo "  --siem    Enable Wazuh SIEM (dashboard at http://localhost:5601)"
     echo ""
     echo "Armis Setup:"
     echo "  Run ./scripts/armis-setup.sh --api-key YOUR_KEY to configure"
@@ -46,29 +47,26 @@ start_grfics() {
         git -C "$LAB_DIR" submodule update --init GRFICSv3
     fi
     cd "$LAB_DIR/GRFICSv3"
-    
-    # Check for Armis integration (via env file or ARMIS_ENABLED flag)
+
     local compose_files="-f docker-compose.yml -f $LAB_DIR/overrides/grfics-override.yml"
-    local armis_msg=""
+    local extra_msg=""
+
+    # Armis integration
     local armis_enabled=0
-    
     if [ "$ARMIS_ENABLED" = "1" ] || [ -f "$LAB_DIR/.env.armis" ]; then
         if [ -f "$LAB_DIR/.env.armis" ]; then
             echo "[*] Loading Armis configuration..."
-            set -a  # Auto-export variables from .env.armis
+            set -a
             source "$LAB_DIR/.env.armis"
             set +a
         fi
-        
         if [ -n "$ARMIS_API_KEY" ]; then
             armis_enabled=1
             echo "[*] Armis integration enabled"
             compose_files="$compose_files -f $LAB_DIR/overrides/armis-monitoring.yml"
-            armis_msg="
+            extra_msg="$extra_msg
     Armis PCAP Capture:   docker logs -f armis-pcap-capture
     Armis Collector VM:   sudo -E ./scripts/armis-collector-setup.sh"
-
-            # Pull required images for Armis
             echo "[*] Pulling Armis monitoring images..."
             docker pull nicolaka/netshoot:latest 2>/dev/null || true
             docker pull rsyslog/rsyslog:latest 2>/dev/null || true
@@ -76,24 +74,35 @@ start_grfics() {
             echo "[!] ARMIS_API_KEY not set - skipping Armis"
         fi
     fi
-    
     if [ $armis_enabled -eq 0 ] && [ "$ARMIS_ENABLED" = "1" ]; then
         echo "[!] ARMIS_ENABLED=1 but no .env.armis found"
         echo "    Run: ./scripts/armis-setup.sh --api-key YOUR_KEY"
     fi
-    
-    docker compose $compose_files up -d
+
+    # Wazuh SIEM
+    local siem_profile=""
+    if [ "${SIEM_ENABLED:-0}" = "1" ]; then
+        echo "[*] Wazuh SIEM enabled"
+        siem_profile="--profile siem"
+        extra_msg="$extra_msg
+    Wazuh Dashboard:      http://localhost:5601  (admin / admin)"
+    fi
+
+    docker compose $compose_files $siem_profile up -d
     echo "[+] GRFICSv3 started"
     echo "    HMI:                 http://localhost:6081"
     echo "    Engineering WS:      http://localhost:6080"
     echo "    OpenPLC:             http://localhost:8080"
+    if [ "${SIEM_ENABLED:-0}" = "1" ]; then
+        echo "    Wazuh Dashboard:     http://localhost:5601"
+    fi
 
     if [ $armis_enabled -eq 1 ]; then
         setup_armis_span
     fi
 
-    if [ -n "$armis_msg" ]; then
-        echo "$armis_msg"
+    if [ -n "$extra_msg" ]; then
+        echo "$extra_msg"
     fi
 }
 
@@ -177,12 +186,17 @@ start_labshock() {
 
 # Parse arguments
 ENABLE_ARMIS=0
+ENABLE_SIEM=0
 TARGET="${1:-all}"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --armis)
             ENABLE_ARMIS=1
+            shift
+            ;;
+        --siem)
+            ENABLE_SIEM=1
             shift
             ;;
         -h|--help)
@@ -199,6 +213,7 @@ done
 case "$TARGET" in
     grfics)
         if [ $ENABLE_ARMIS -eq 1 ]; then export ARMIS_ENABLED=1; fi
+        if [ $ENABLE_SIEM  -eq 1 ]; then export SIEM_ENABLED=1;  fi
         start_grfics
         ;;
     labshock)
@@ -206,6 +221,7 @@ case "$TARGET" in
         ;;
     all)
         if [ $ENABLE_ARMIS -eq 1 ]; then export ARMIS_ENABLED=1; fi
+        if [ $ENABLE_SIEM  -eq 1 ]; then export SIEM_ENABLED=1;  fi
         start_grfics
         start_labshock
         ;;
@@ -214,6 +230,7 @@ case "$TARGET" in
         echo "[*] Restarting $RESTART_TARGET..."
         "$SCRIPT_DIR/stop-lab.sh" "$RESTART_TARGET"
         if [ $ENABLE_ARMIS -eq 1 ]; then export ARMIS_ENABLED=1; fi
+        if [ $ENABLE_SIEM  -eq 1 ]; then export SIEM_ENABLED=1;  fi
         case "$RESTART_TARGET" in
             grfics)  start_grfics ;;
             labshock) start_labshock ;;
@@ -225,6 +242,7 @@ case "$TARGET" in
         echo "[!] Resetting $RESET_TARGET — all persistent data will be wiped"
         "$SCRIPT_DIR/stop-lab.sh" "$RESET_TARGET" --wipe
         if [ $ENABLE_ARMIS -eq 1 ]; then export ARMIS_ENABLED=1; fi
+        if [ $ENABLE_SIEM  -eq 1 ]; then export SIEM_ENABLED=1;  fi
         case "$RESET_TARGET" in
             grfics)  start_grfics ;;
             labshock) start_labshock ;;

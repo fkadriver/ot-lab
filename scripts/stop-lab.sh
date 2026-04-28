@@ -99,5 +99,5 @@ docker network ls | grep -E 'grfics|labshock' || echo "    (none)"
 if [[ $WIPE -eq 1 ]]; then
     echo ""
     echo "[*] Remaining OT volumes:"
-    docker volume ls | grep -E 'grfics|scadalts|plc|router|armis|labshock' || echo "    (none)"
+    docker volume ls | grep -E 'grfics|scadalts|plc|router|armis|labshock|wazuh' || echo "    (none)"
 fi
