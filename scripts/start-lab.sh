@@ -85,6 +85,13 @@ start_grfics() {
     local siem_profile=""
     if [ "${SIEM_ENABLED:-0}" = "1" ]; then
         echo "[*] Wazuh SIEM enabled"
+        # OpenSearch requires vm.max_map_count >= 262144
+        local map_count
+        map_count=$(cat /proc/sys/vm/max_map_count 2>/dev/null || echo 0)
+        if [[ $map_count -lt 262144 ]]; then
+            echo "[*] Setting vm.max_map_count=262144 (required by OpenSearch)..."
+            sysctl -w vm.max_map_count=262144
+        fi
         siem_profile="--profile siem"
         extra_msg="$extra_msg
     Wazuh Dashboard:      http://localhost:5601  (admin / admin)"
