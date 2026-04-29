@@ -90,7 +90,9 @@ start_grfics() {
     Wazuh Dashboard:      http://localhost:5601  (admin / admin)"
     fi
 
-    docker compose $compose_files $siem_profile up -d
+    docker compose $compose_files $siem_profile up -d || {
+        echo "[!] docker compose exited with errors — some containers may not have started"
+    }
     echo "[+] GRFICSv3 started"
     echo "    HMI:                 http://localhost:6081"
     echo "    Engineering WS:      http://localhost:6080"
@@ -144,11 +146,17 @@ reattach_armis_tap() {
 setup_armis_span() {
     reattach_armis_tap
     echo "[*] Setting up Armis SPAN mirrors on router..."
-    local retries=10
+
+    # Wait up to 90s — Wazuh and other containers slow overall startup
+    local retries=30
     while ! docker exec router ip addr show &>/dev/null 2>&1; do
         retries=$((retries - 1))
-        [[ $retries -le 0 ]] && echo "[!] Router not ready — skipping SPAN setup" && return
-        sleep 2
+        if [[ $retries -le 0 ]]; then
+            echo "[!] Router not ready after 90s — SPAN not applied"
+            echo "    Re-run:  ./scripts/start-lab.sh grfics --armis"
+            return 1
+        fi
+        sleep 3
     done
 
     # Detect admin interface by the 172.18.0.0/16 subnet
@@ -158,9 +166,9 @@ setup_armis_span() {
     dmz_iface=$(docker exec router ip -o addr show | awk '/192\.168\.90\./ {print $2}')
 
     if [[ -z "$admin_iface" || -z "$ics_iface" || -z "$dmz_iface" ]]; then
-        echo "[!] Could not detect router interfaces — skipping SPAN setup"
+        echo "[!] Could not detect router interfaces — SPAN not applied"
         echo "    admin=$admin_iface  ics=$ics_iface  dmz=$dmz_iface"
-        return
+        return 1
     fi
     echo "[*] Router interfaces: admin=$admin_iface  ics=$ics_iface  dmz=$dmz_iface"
 
@@ -171,7 +179,17 @@ setup_armis_span() {
         docker exec router tc filter replace dev "$iface" egress  protocol all \
             u32 match u32 0 0 action mirred egress mirror dev "$admin_iface"
     done
-    echo "[*] SPAN mirrors active: $ics_iface+$dmz_iface → $admin_iface (Armis TAP)"
+
+    # Verify rules actually landed
+    local rule_count
+    rule_count=$(docker exec router tc filter show dev "$ics_iface" ingress 2>/dev/null | grep -c mirred || true)
+    if [[ $rule_count -gt 0 ]]; then
+        echo "[+] SPAN mirrors active: $ics_iface+$dmz_iface → $admin_iface (Armis TAP)"
+    else
+        echo "[!] SPAN rules failed to apply — Armis collector will not see OT traffic"
+        echo "    Re-run:  ./scripts/start-lab.sh grfics --armis"
+        return 1
+    fi
 }
 
 start_labshock() {
