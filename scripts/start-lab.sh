@@ -190,6 +190,30 @@ setup_armis_span() {
         echo "    Re-run:  ./scripts/start-lab.sh grfics --armis"
         return 1
     fi
+
+    # Mirror traffic from the router's host-side veth directly to tap-armis.
+    # The Linux bridge learns ICS/DMZ MACs on the router's veth (from mirrored
+    # traffic) and then drops unicast between endpoints on the same port — so
+    # tap-armis only sees broadcast.  Adding a tc mirror on the host-side veth
+    # captures every packet at ingress (before the bridge forwarding decision),
+    # delivering a copy to tap-armis regardless of the MAC table.
+    local peer_idx router_veth
+    peer_idx=$(docker exec router ip -o link show "$admin_iface" 2>/dev/null \
+        | grep -oE '@if[0-9]+' | head -1 | tr -d '@if')
+    if [[ -n "$peer_idx" ]]; then
+        router_veth=$(ip -o link 2>/dev/null \
+            | awk -v idx="${peer_idx}:" '$1==idx {print $2; exit}' | cut -d@ -f1)
+    fi
+
+    if [[ -n "$router_veth" ]]; then
+        tc qdisc add dev "$router_veth" clsact 2>/dev/null || true
+        tc filter replace dev "$router_veth" ingress protocol all \
+            u32 match u32 0 0 action mirred egress mirror dev tap-armis
+        echo "[*] Host-side tc mirror: $router_veth ingress → tap-armis (unicast OT traffic now visible)"
+    else
+        echo "[!] Could not identify router veth on admin bridge"
+        echo "    Armis collector may only see broadcast traffic"
+    fi
 }
 
 start_labshock() {
