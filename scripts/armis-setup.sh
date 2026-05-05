@@ -15,12 +15,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 GRFICS_DIR="$LAB_DIR/GRFICSv3"
 
-# Default values — preserve env vars if already set (e.g. from source .env.armis)
-ARMIS_HOSTNAME="${ARMIS_HOSTNAME:-lab-kudelski.armis.com}"
+# Preserve env vars if already set (e.g. from source .env.armis)
+ARMIS_HOSTNAME="${ARMIS_HOSTNAME:-}"
 ARMIS_API_KEY="${ARMIS_API_KEY:-}"
-ARMIS_TENANT_ID="${ARMIS_TENANT_ID:-}"
+ARMIS_COLLECTOR_ACTIVATION_KEY="${ARMIS_COLLECTOR_ACTIVATION_KEY:-}"
+ARMIS_COLLECTOR_PASSWORD="${ARMIS_COLLECTOR_PASSWORD:-}"
 SHOW_HELP=0
-CHECK_COLLECTOR_ID=""
 
 # ============================================================================
 # Functions
@@ -39,20 +39,17 @@ print_usage() {
 Usage: $0 [OPTIONS]
 
 Required:
-  --api-key KEY             Armis API token
+  --api-key KEY             Armis secret key (Settings → API)
+  --hostname HOST           Armis tenant hostname (e.g. your-tenant.armis.com)
+  --activation-key KEY      Collector Activation Key (Add Virtual Collector wizard → Summary)
+  --collector-password PASS Collector Tenant Password (same wizard page)
 
 Optional:
-  --hostname HOST           Armis API hostname
-                           Default: lab-kudelski.armis.com
-                           Options: lab-kudelski.armis.com or custom
-  --tenant-id ID            Armis tenant ID (optional)
-  --check-collector ID      Check registration status of a collector by ID
-  --help                   Show this help message
+  --help                    Show this help message
 
 Examples:
-  $0 --api-key "abc123def456"
-  $0 --api-key "abc123" --hostname "eu.armis.com"
-  $0 --api-key "abc123" --hostname "custom.armis.com" --tenant-id "my-tenant"
+  $0 --api-key "abc123" --hostname "your-tenant.armis.com" \
+     --activation-key "8d0758e54" --collector-password "hunter2"
 
 EOF
 }
@@ -129,9 +126,10 @@ test_armis_api() {
 create_env_file() {
     local api_key="$1"
     local hostname="$2"
-    local tenant_id="$3"
+    local activation_key="$3"
+    local collector_password="$4"
     local env_file="$LAB_DIR/.env.armis"
-    
+
     cat > "$env_file" << EOF
 # Armis Integration Configuration
 # Loaded automatically by start-lab.sh when this file exists.
@@ -139,9 +137,12 @@ create_env_file() {
 
 export ARMIS_API_KEY="$api_key"
 export ARMIS_HOSTNAME="$hostname"
-$([ -n "$tenant_id" ] && echo "export ARMIS_TENANT_ID=\"$tenant_id\"" || true)
+
+# Virtual Collector — from Add Virtual Collector wizard → Summary
+export ARMIS_COLLECTOR_ACTIVATION_KEY="$activation_key"
+export ARMIS_COLLECTOR_PASSWORD="$collector_password"
 EOF
-    
+
     echo "✓ Created $env_file"
     return 0
 }
@@ -251,12 +252,12 @@ while [[ $# -gt 0 ]]; do
             ARMIS_HOSTNAME="$2"
             shift 2
             ;;
-        --tenant-id)
-            ARMIS_TENANT_ID="$2"
+        --activation-key)
+            ARMIS_COLLECTOR_ACTIVATION_KEY="$2"
             shift 2
             ;;
-        --check-collector)
-            CHECK_COLLECTOR_ID="$2"
+        --collector-password)
+            ARMIS_COLLECTOR_PASSWORD="$2"
             shift 2
             ;;
         --help)
@@ -273,12 +274,7 @@ done
 
 print_banner
 
-if [[ -n "$CHECK_COLLECTOR_ID" ]]; then
-    check_collector "$CHECK_COLLECTOR_ID"
-    exit $?
-fi
-
-if [[ $SHOW_HELP -eq 1 ]] || [[ -z "$ARMIS_API_KEY" ]]; then
+if [[ $SHOW_HELP -eq 1 ]] || [[ -z "$ARMIS_API_KEY" ]] || [[ -z "$ARMIS_HOSTNAME" ]]; then
     print_usage
     exit 1
 fi
@@ -299,7 +295,7 @@ test_armis_api "$ARMIS_API_KEY" "$ARMIS_HOSTNAME" || echo "[!] Continuing withou
 
 # Create environment file
 echo "[*] Creating configuration file..."
-create_env_file "$ARMIS_API_KEY" "$ARMIS_HOSTNAME" "$ARMIS_TENANT_ID"
+create_env_file "$ARMIS_API_KEY" "$ARMIS_HOSTNAME" "$ARMIS_COLLECTOR_ACTIVATION_KEY" "$ARMIS_COLLECTOR_PASSWORD"
 
 # Show next steps
 show_next_steps "$ARMIS_API_KEY" "$ARMIS_HOSTNAME"
