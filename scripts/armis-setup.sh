@@ -161,21 +161,26 @@ Credentials saved to: $env_file
 
 Next Steps:
 
-1. Start the lab with Armis monitoring:
+1. Add collector credentials to .env.armis
+   (from Armis console: Settings → Sensors & Collectors → Add Virtual Collector → Summary):
+   ARMIS_COLLECTOR_ACTIVATION_KEY="<activation key>"
+   ARMIS_COLLECTOR_PASSWORD="<tenant password>"
+
+2. Start the lab with Armis monitoring:
    ./scripts/start-lab.sh grfics --armis
 
-2. Launch the Armis collector VM (required for traffic ingestion):
-   ./scripts/armis-collector-setup.sh
-   # Activate at https://localhost:18443 (user: config / pass: Armis)
-   # Collector ID: 8156  Tenant: $hostname
+3. Launch the Armis collector VM (required for traffic ingestion):
+   source .env.armis
+   sudo -E ./scripts/armis-collector-setup.sh
 
-3. Check Armis console for discovered devices:
+4. Activate via the Collector Config Interface (instructions printed by step 3).
+
+5. Check Armis console for discovered devices:
    https://$hostname/
 
 Troubleshooting:
-- Collector status:  ./scripts/armis-setup.sh --check-collector 8156
-- Monitoring logs:   docker logs armis-pcap-capture
-- Serial console:    tail -f /opt/armis-collector/serial.log
+- Monitoring logs:  docker logs armis-pcap-capture
+- Serial console:   tail -f /opt/armis-collector/serial.log
 
 EOF
 }
