@@ -1,4 +1,0 @@
-.env.armis
-*.qcow2
-*.pcap
-/opt/armis-collector/
