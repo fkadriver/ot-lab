@@ -170,6 +170,20 @@ open http://localhost:8888   # red / fortiphyd-red
 docker exec kali mbpoll -a 1 -t 0 -1 192.168.95.2 1
 ```
 
+### span-test.py — Armis SPAN Verification
+
+Generates Modbus traffic across multiple function codes (FC01–FC16 + a 30-cycle burst) to confirm the Armis collector is capturing traffic via the SPAN mirror.
+
+```bash
+# Run inside the kali container (scripts are mounted at /opt/lab-scripts/)
+docker exec kali python3 /opt/lab-scripts/span-test.py
+
+# Or pipe from the host without entering the container
+docker exec -i kali python3 - < scripts/span-test.py
+```
+
+After the script completes, check **Armis portal → Collector → Span Statistics** for a rising unicast count. Devices should appear in the portal within 1–2 minutes.
+
 ---
 
 ## Azure Deployment
@@ -201,3 +215,9 @@ See [ot-lab_azure/README.md](ot-lab_azure/README.md) for full deployment steps.
 - [Wazuh Documentation](https://documentation.wazuh.com/)
 - [DigitalBond Quickdraw Rules](https://github.com/digitalbond/Quickdraw-Snort)
 - [CISA ICS Advisories](https://www.cisa.gov/ics-advisories)
+
+### Additional ICS Security Resources
+
+- [ITI/ICS-Security-Tools](https://github.com/ITI/ICS-Security-Tools) — curated index of ICS simulation environments, protocol tools, and testbeds maintained by the University of Illinois Information Trust Institute
+- [ICS Village CTF — Hack the Plan(e)t](https://hacktheplanet.ctfd.io) — self-paced CTF challenges covering Modbus, DNP3, EtherNet/IP, and BACnet packet analysis, PLC logic, and ICS forensics; updated each DEFCON cycle
+- [libIEC61850](https://github.com/mz-automation/libiec61850) — reference open-source C library for IEC 61850 (MMS, GOOSE, Sampled Values); ships with working IED server/client examples for building custom substation emulators
