@@ -161,6 +161,3 @@ esac
 echo ""
 echo "[*] Active OT networks:"
 docker network ls | grep -E 'grfics|labshock' || echo "    (none yet)"
-
-echo ""
-echo "[*] To connect a sensor, see docs/sensor-setup.md"
