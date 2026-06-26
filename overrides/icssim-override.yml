@@ -1,0 +1,41 @@
+# ICSSIM build context fix.
+# The Dockerfiles do `COPY ./src/ ./src/` but the default build context
+# (ics-docker/ or attacker-docker/) does not contain src/.
+# context: .. walks up from deployments/ to the icssim root so COPY finds src/.
+services:
+  pys:
+    build:
+      context: ..
+      dockerfile: deployments/ics-docker/Dockerfile
+  plc1:
+    build:
+      context: ..
+      dockerfile: deployments/ics-docker/Dockerfile
+  plc2:
+    build:
+      context: ..
+      dockerfile: deployments/ics-docker/Dockerfile
+  hmi1:
+    build:
+      context: ..
+      dockerfile: deployments/ics-docker/Dockerfile
+  hmi2:
+    build:
+      context: ..
+      dockerfile: deployments/ics-docker/Dockerfile
+  hmi3:
+    build:
+      context: ..
+      dockerfile: deployments/ics-docker/Dockerfile
+  attacker:
+    build:
+      context: ..
+      dockerfile: deployments/attacker-docker/Dockerfile
+  attacker2:
+    build:
+      context: ..
+      dockerfile: deployments/attacker-docker/Dockerfile
+  attackerremote:
+    build:
+      context: ..
+      dockerfile: deployments/attacker-docker/Dockerfile

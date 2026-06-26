@@ -66,7 +66,10 @@ start_labshock() {
 start_icssim() {
     ensure_submodule icssim "$LAB_DIR/icssim"
     echo "[*] Starting ICSSIM (bottle-filling factory)..."
-    (cd "$LAB_DIR/icssim" && docker compose -f deployments/docker-compose.yml up -d)
+    (cd "$LAB_DIR/icssim" && docker compose \
+        -f deployments/docker-compose.yml \
+        -f "$LAB_DIR/overrides/icssim-override.yml" \
+        up -d --build)
     echo "[+] ICSSIM ready — Modbus TCP factory simulation running"
 }
 
