@@ -221,27 +221,6 @@ docker exec kali mbpoll -a 1 -t 0 -1 192.168.95.2 1
 
 ---
 
-## Azure Deployment
-
-A self-contained Azure deployment package is in [ot-lab_azure/](ot-lab_azure/). It includes:
-
-- **Bicep template** — single-VM deployment (Ubuntu 22.04, nested-virt capable D-series)
-- **cloud-init** — bootstraps Docker, QEMU/KVM, and OVMF at first boot
-- **Azure network override** — uses Docker `bridge` instead of `macvlan` (Azure hypervisors drop macvlan subinterface traffic)
-- **Scripts** — all lab scripts with credentials stripped
-- No Wazuh/SIEM in the Azure package
-
-```bash
-# One-time deploy
-az group create -n ot-lab-rg -l eastus
-az deployment group create -g ot-lab-rg -f ot-lab_azure/deploy/main.bicep \
-  -p adminUsername=labadmin adminPublicKey="$(cat ~/.ssh/id_rsa.pub)"
-```
-
-See [ot-lab_azure/README.md](ot-lab_azure/README.md) for full deployment steps.
-
----
-
 ## Resources
 
 - [GRFICSv3](https://github.com/Fortiphyd/GRFICSv3)

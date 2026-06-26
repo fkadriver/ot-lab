@@ -4,9 +4,6 @@
 [submodule "labshock"]
 	path = labshock
 	url = https://github.com/zakharb/labshock
-[submodule "ot-lab_azure"]
-	path = ot-lab_azure
-	url = git@gitlab.kudelski.com:sjensen/ot-lab_azure.git
 [submodule "rangerdanger"]
 	path = rangerdanger
 	url = https://github.com/tonylturner/rangerdanger

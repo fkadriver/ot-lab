@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**ot-lab** is an OT/ICS cybersecurity lab for testing security tools against realistic industrial control system environments. It combines simulation platforms (GRFICSv3, Labshock) with an optional Wazuh SIEM integration and supports both local and Azure cloud deployments.
+**ot-lab** is an OT/ICS cybersecurity lab for testing security tools against realistic industrial control system environments. It combines simulation platforms (GRFICSv3, Labshock) with an optional Wazuh SIEM integration.
 
 ## Lab Management Commands
 
@@ -38,7 +38,6 @@ touch .configured   # signals lab.sh that install is complete
 - **labshock/** — multi-protocol ICS breadth lab (Modbus, S7comm, EtherNet/IP, BACnet, OPC UA, MQTT)
 - **rangerdanger/** — electric substation segmentation training platform; Docker Compose, DNP3 + Modbus, OpenDSS power-flow simulation, IEC 62443 zones, structured lab exercises; bundles containd as its NGFW; needs ports 8088/9080/9443/2222 and 16 GB RAM
 - **containd/** — ICS-aware NGFW container (Go binary, Docker Compose); zone-based firewalling with deep packet inspection for Modbus, DNP3, CIP, S7comm, IEC 61850, BACnet, OPC UA at function-code level; learn-then-enforce workflow; can augment the Suricata router in GRFICSv3 for protocol-aware enforcement
-- **ot-lab_azure/** — Azure deployment package (GitLab submodule, private)
 
 ### Network Segments
 | Segment | CIDR | Hosts |
@@ -55,11 +54,6 @@ The router container sits at the boundary of all three segments and runs Suricat
 - `labshock/docker-compose.yml` — standalone Labshock stack
 
 The `start-lab.sh` script merges these with `-f` flags as needed.
-
-### Azure Deployment
-- Bicep IaC in `ot-lab_azure/deploy/` with cloud-init bootstrapping
-- Uses Docker bridge networking (not macvlan) due to Azure hypervisor MAC filtering
-- Deploy: `az deployment group create -g ot-lab-rg -f ot-lab_azure/deploy/main.bicep -p adminUsername=labadmin adminPublicKey="$(cat ~/.ssh/id_rsa.pub)"`
 
 ## Key Files
 - `scripts/start-lab.sh` — orchestration entry point; controls which compose files are merged
