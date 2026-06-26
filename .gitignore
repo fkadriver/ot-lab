@@ -4,8 +4,7 @@
 *api-key*
 *apikey*
 
-# Armis collector image (3.5 GB VM disk)
-/opt/armis-collector/
+# VM disk images
 *.qcow2
 *.ova
 *.vhd

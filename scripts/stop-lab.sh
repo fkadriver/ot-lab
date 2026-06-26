@@ -17,7 +17,7 @@ usage() {
     echo "  all       Stop both (default)"
     echo ""
     echo "Options:"
-    echo "  --wipe    Remove all persistent volumes and Armis VM UEFI state"
+    echo "  --wipe    Remove all persistent volumes"
     echo "            (ScadaLTS DB, PLC state, PCAPs, flow stats, etc.)"
     exit 1
 }
@@ -30,14 +30,6 @@ stop_grfics() {
     echo "[*] Stopping GRFICSv3..."
     cd "$LAB_DIR/GRFICSv3"
     local compose_files="-f docker-compose.yml -f $LAB_DIR/overrides/grfics-override.yml"
-    if [ -f "$LAB_DIR/overrides/armis-monitoring.yml" ]; then
-        # Always include armis overlay when wiping so its volumes are removed.
-        # On a normal stop, only include it if those containers are actually running.
-        if [[ $WIPE -eq 1 ]] || \
-           docker compose $compose_files -f "$LAB_DIR/overrides/armis-monitoring.yml" ps -q 2>/dev/null | grep -q .; then
-            compose_files="$compose_files -f $LAB_DIR/overrides/armis-monitoring.yml"
-        fi
-    fi
     local down_flags=""
     [[ $WIPE -eq 1 ]] && down_flags="-v"
     docker compose $compose_files down $down_flags
@@ -55,18 +47,6 @@ stop_labshock() {
     [[ $WIPE -eq 1 ]] && down_flags="-v"
     docker compose down $down_flags
     echo "[-] Labshock stopped"
-}
-
-wipe_armis_vm() {
-    local vars="/opt/armis-collector/ovmf_vars.fd"
-    if pkill -f "qemu.*-name armis-collector" 2>/dev/null; then
-        echo "[-] Armis collector VM stopped"
-        sleep 1
-    fi
-    if [ -f "$vars" ]; then
-        rm -f "$vars"
-        echo "[-] Armis VM UEFI state wiped ($vars)"
-    fi
 }
 
 # Parse args
@@ -90,10 +70,6 @@ case "$TARGET" in
     all)      stop_grfics; stop_labshock ;;
 esac
 
-if [[ $WIPE -eq 1 ]]; then
-    wipe_armis_vm
-fi
-
 echo ""
 echo "[*] Remaining OT networks:"
 docker network ls | grep -E 'grfics|labshock' || echo "    (none)"
@@ -101,5 +77,5 @@ docker network ls | grep -E 'grfics|labshock' || echo "    (none)"
 if [[ $WIPE -eq 1 ]]; then
     echo ""
     echo "[*] Remaining OT volumes:"
-    docker volume ls | grep -E 'grfics|scadalts|plc|router|armis|labshock|wazuh' || echo "    (none)"
+    docker volume ls | grep -E 'grfics|scadalts|plc|router|labshock|wazuh' || echo "    (none)"
 fi

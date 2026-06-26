@@ -1,10 +1,10 @@
 # Connecting OT Security Sensors to the Lab
 
-This guide covers how to connect a Claroty, Nozomi, Dragos, or Armis sensor to the Docker-based lab environments.
+This guide covers how to connect a Claroty, Nozomi, or Dragos sensor to the Docker-based lab environments.
 
 ## How These Tools Work
 
-Claroty, Nozomi, Dragos, and Armis all use **passive network traffic analysis** as their primary discovery method. They need to see OT protocol traffic (Modbus, EtherNet/IP, S7, etc.) on a monitored interface. In a physical deployment this is done via a network tap or SPAN port on a managed switch.
+Claroty, Nozomi, and Dragos all use **passive network traffic analysis** as their primary discovery method. They need to see OT protocol traffic (Modbus, EtherNet/IP, S7, etc.) on a monitored interface. In a physical deployment this is done via a network tap or SPAN port on a managed switch.
 
 In a Docker lab, you replicate this by either:
 1. Attaching the sensor container to the same Docker network as the simulation
@@ -104,7 +104,3 @@ mbpoll -a 1 -r 1 -t 0 -1 <plc-ip> 1       # Write coil (anomalous command)
 - Works well with GRFICSv3's realistic process simulation
 - Built-in threat analytics for known ICS malware signatures (CRASHOVERRIDE, INDUSTROYER2, etc.)
 
-### Armis
-- Agentless, cloud-based analysis
-- Typically deployed via network traffic feed or integration
-- Strong on device fingerprinting and vulnerability correlation
