@@ -13,8 +13,8 @@ git pull --ff-only
 
 # Show current submodule state before update
 echo
-echo "[2/3] Fetching latest submodule commits..."
-git submodule update --remote --merge
+echo "[2/3] Initialising and fetching latest submodule commits..."
+git submodule update --init --remote --merge
 
 # Show what changed
 echo
