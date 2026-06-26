@@ -15,9 +15,10 @@ All modules run as independent Docker Compose stacks and are launched via `./lab
 │  ── Process Simulations ──────────────────────────────────────────  │
 │                                                                      │
 │  GRFICSv3     Tennessee Eastman chemical plant                       │
-│               OpenPLC · ScadaLTS · Caldera C2 · Kali                │
+│               3D simulation · OpenPLC · ScadaLTS · Caldera C2 · Kali│
 │               ICS Net 192.168.95.0/24 · DMZ Net 192.168.90.0/24     │
-│               Router w/ Suricata IDS · Wazuh SIEM (optional)        │
+│               Router dashboard (firewall · DNS · WireGuard · ARP)   │
+│               Suricata IDS · Wazuh SIEM (optional)                  │
 │                                                                      │
 │  Labshock     Multi-protocol SCADA breadth                           │
 │               Modbus RTU/TCP · S7comm · EtherNet/IP · BACnet ·      │
@@ -55,20 +56,18 @@ All modules run as independent Docker Compose stacks and are launched via `./lab
 **Repo:** https://github.com/Fortiphyd/GRFICSv3  
 **Protocols:** Modbus TCP, EtherNet/IP
 
-Simulates a Tennessee Eastman chemical process with a full ICS stack:
+Simulates a Tennessee Eastman chemical process with a full ICS stack. v1.3 adds a 3D plant visualization with a first-person virtual walkthrough for spotting physical security failures (sticky-note passwords, propped doors, unlocked cabinets), a router web dashboard with DNS management, WireGuard VPN, ARP monitor, diagnostics, and native Wazuh SIEM profile support.
 
-| Service | URL | Notes |
+| Service | URL | Credentials |
 |---|---|---|
+| 3D Simulation | http://localhost | — |
+| Engineering Workstation | http://localhost:6080 | — |
+| Kali (attacker) | http://localhost:6088 | `kali` / `kali` |
 | OpenPLC (PLC runtime) | http://localhost:8080 | `openplc` / `openplc` |
 | ScadaLTS (HMI) | http://localhost:6081 | `admin` / `admin` |
-| Engineering WS | http://localhost:6080 | |
 | Caldera C2 | http://localhost:8888 | `red` / `fortiphyd-red` |
-
-**Optional add-ons:**
-
-| Flag | Add-on | URL |
-|---|---|---|
-| `--siem` | Wazuh SIEM (Manager + Indexer + Dashboard) | http://localhost:5601 — `admin` / `admin` |
+| Router / Firewall UI | http://192.168.90.200:5000 | `admin` / `password` |
+| Wazuh SIEM *(optional)* | http://localhost:5601 | `admin` / `admin` |
 
 ### Labshock — Protocol Breadth
 
@@ -200,7 +199,12 @@ cd ot-lab
 Wazuh is bundled as an optional all-in-one container (Manager + OpenSearch Indexer + Dashboard). Wazuh agents are pre-installed on the router (Suricata/Quickdraw ICS alerts) and ScadaLTS (Tomcat/MariaDB logs).
 
 ```bash
+# Via lab launcher
 ./scripts/start-lab.sh grfics --siem
+
+# Or natively via GRFICSv3 v1.3 Docker profile
+cd GRFICSv3 && docker compose --profile siem up -d
+
 # Dashboard: http://localhost:5601  (admin / admin)
 ```
 
