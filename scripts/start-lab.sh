@@ -63,8 +63,20 @@ start_labshock() {
     echo "    Protocols: Modbus RTU/TCP · S7comm · EtherNet/IP · BACnet · OPC UA · MQTT"
 }
 
+fix_timezone_file() {
+    # Some systems have /etc/timezone as an empty directory instead of a text
+    # file. Docker bind-mounting it onto a file inside the container fails.
+    if [[ -d /etc/timezone ]]; then
+        local tz
+        tz=$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||')
+        echo "[*] /etc/timezone is a directory — replacing with file (${tz:-UTC})..."
+        rmdir /etc/timezone 2>/dev/null && echo "${tz:-UTC}" > /etc/timezone
+    fi
+}
+
 start_icssim() {
     ensure_submodule icssim "$LAB_DIR/icssim"
+    fix_timezone_file
     echo "[*] Starting ICSSIM (bottle-filling factory)..."
     (cd "$LAB_DIR/icssim" && docker compose \
         -f deployments/docker-compose.yml \
