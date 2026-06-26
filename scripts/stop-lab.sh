@@ -72,10 +72,10 @@ stop_rangerdanger() {
 }
 
 stop_containd() {
-    [[ -f "$LAB_DIR/containd/docker-compose.yml" ]] || { echo "[-] containd not initialised, skipping"; return; }
+    [[ -f "$LAB_DIR/containd/deploy/docker-compose.yml" ]] || { echo "[-] containd not initialised, skipping"; return; }
     echo "[*] Stopping containd..."
     local flags=""; [[ $WIPE -eq 1 ]] && flags="-v"
-    (cd "$LAB_DIR/containd" && docker compose down $flags)
+    (cd "$LAB_DIR/containd" && docker compose -f deploy/docker-compose.yml down $flags)
     echo "[-] containd stopped"
 }
 

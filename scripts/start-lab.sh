@@ -116,7 +116,7 @@ start_rangerdanger() {
 start_containd() {
     ensure_submodule containd "$LAB_DIR/containd"
     echo "[*] Starting containd (ICS-aware NGFW)..."
-    (cd "$LAB_DIR/containd" && docker compose up -d)
+    (cd "$LAB_DIR/containd" && docker compose -f deploy/docker-compose.yml up -d)
     echo "[+] containd ready"
     echo "    Web UI  http://localhost:8080  SSH :2222"
 }

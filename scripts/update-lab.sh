@@ -11,19 +11,31 @@ echo
 echo "[1/3] Pulling latest repo..."
 git pull --ff-only
 
-# Show current submodule state before update
+# Recover ghost submodules: git marks them initialized (writes a .git file)
+# even when the clone was interrupted, leaving an empty directory. deinit+init
+# forces a fresh clone for any submodule whose directory has only a .git file.
 echo
-echo "[2/3] Initialising and fetching latest submodule commits..."
+echo "[2/3] Checking for incomplete submodule clones..."
+git submodule foreach --quiet 'echo "$name $displaypath"' 2>/dev/null | \
+while read -r name path; do
+    # Count non-.git entries in the submodule directory
+    content=$(find "$REPO_ROOT/$path" -mindepth 1 -not -name '.git' 2>/dev/null | wc -l)
+    if [[ "$content" -eq 0 ]]; then
+        echo "[!] $name has empty working tree — reinitialising..."
+        git submodule deinit -f "$path"
+        git submodule update --init "$path"
+    fi
+done
+
+echo
+echo "[3/3] Fetching latest commits for all submodules..."
 git submodule update --init --remote --merge
 
-# Show what changed
 echo
-echo "[3/3] Submodule status after update:"
+echo "Submodule status:"
 git submodule status
 
-# If any pins changed, offer to commit.
-# Use submodule summary rather than git diff --quiet so dirty working trees
-# inside submodules don't trigger a false positive.
+# Only prompt to commit if pins actually moved (ignore dirty working trees).
 SUMMARY=$(git submodule summary 2>/dev/null || true)
 if [[ -n "$SUMMARY" ]]; then
     echo
