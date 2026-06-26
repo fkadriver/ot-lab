@@ -21,13 +21,19 @@ echo
 echo "[3/3] Submodule status after update:"
 git submodule status
 
-# If any pins changed, offer to commit
-if ! git diff --quiet; then
+# If any pins changed, offer to commit.
+# Use submodule summary rather than git diff --quiet so dirty working trees
+# inside submodules don't trigger a false positive.
+SUMMARY=$(git submodule summary 2>/dev/null || true)
+if [[ -n "$SUMMARY" ]]; then
     echo
-    echo "Submodule pins have changed. Commit updated pins? [y/N]"
+    echo "Submodule pins have changed:"
+    echo "$SUMMARY"
+    echo
+    echo "Commit updated pins? [y/N]"
     read -r answer
     if [[ "${answer,,}" == "y" ]]; then
-        git add .
+        git add $(git submodule status | awk '{print $2}')
         git commit -m "submodules: advance all to latest remote"
         echo "Committed. Run 'git push' to publish."
     else
