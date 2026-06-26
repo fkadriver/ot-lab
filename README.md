@@ -172,6 +172,9 @@ cd ot-lab
 ## Lab Management
 
 ```bash
+# Update repo and all submodules to latest
+./scripts/update-lab.sh
+
 # Start
 ./scripts/start-lab.sh [grfics|labshock|all] [--siem]
 
