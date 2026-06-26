@@ -82,6 +82,17 @@ start_icssim() {
         -f deployments/docker-compose.yml \
         -f "$LAB_DIR/overrides/icssim-override.yml" \
         up -d --build)
+    # pys initialises memcached tables before PLCs can connect.
+    # Wait for it to report 'started' then restart the PLCs.
+    echo "[*] Waiting for physical simulation (pys) to initialise..."
+    local retries=20
+    until docker logs pys 2>/dev/null | grep -q "\[INFO\] started"; do
+        retries=$((retries - 1))
+        [[ $retries -le 0 ]] && echo "[!] pys did not start in time" && return 1
+        sleep 3
+    done
+    echo "[*] Restarting PLCs now that pys is ready..."
+    docker restart plc1 plc2 >/dev/null
     echo "[+] ICSSIM ready — Modbus TCP factory simulation running"
 }
 
