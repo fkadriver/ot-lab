@@ -21,12 +21,7 @@ A personal OT/ICS security lab for testing and evaluating cybersecurity tools ag
 │  │            Admin Bridge (172.18.0.0/16)                │   │
 │  │                    │                                    │   │
 │  │          Wazuh SIEM (optional --siem)                  │   │
-│  └────────────────────┼───────────────────────────────────┘   │
-│                        │ tc SPAN mirror                         │
-│  ┌─────────────────────▼─────────────────────────────────┐    │
-│  │        Armis Collector VM / QCOW2 (optional --armis)   │    │
-│  │        Passive capture → lab-kudelski.armis.com        │    │
-│  └────────────────────────────────────────────────────────┘    │
+│  └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │              Labshock (Docker, optional)                  │  │
@@ -58,7 +53,6 @@ Simulates a Tennessee Eastman chemical process with a full ICS stack:
 | Flag | Add-on | URL |
 |---|---|---|
 | `--siem` | Wazuh SIEM (Manager + Indexer + Dashboard) | http://localhost:5601 — `admin` / `admin` |
-| `--armis` | Armis vSensor collector VM | https://localhost:18443 — `config` / `Armis` |
 
 ### Labshock — Protocol Breadth
 
@@ -75,21 +69,13 @@ Broader protocol coverage than GRFICSv3. Trial mode limits sessions to 40 minute
 git clone --recursive https://github.com/fkadriver/ot-lab
 cd ot-lab
 
-# GRFICSv3 only
+# Interactive launcher — select modules from a menu
+./lab.sh
+
+# Or start specific components directly
 ./scripts/start-lab.sh grfics
-
-# GRFICSv3 + Wazuh SIEM
 ./scripts/start-lab.sh grfics --siem
-
-# GRFICSv3 + Armis collector
-source .env.armis
-./scripts/start-lab.sh grfics --armis
-
-# Everything
-./scripts/start-lab.sh all --siem --armis
-
-# Start the Armis collector VM (first time or after host reboot)
-./scripts/armis-collector-setup.sh
+./scripts/start-lab.sh all --siem
 ```
 
 ---
@@ -98,48 +84,22 @@ source .env.armis
 
 ```bash
 # Start
-./scripts/start-lab.sh [grfics|labshock|all] [--siem] [--armis]
+./scripts/start-lab.sh [grfics|labshock|all] [--siem]
 
 # Stop (keeps all data)
 ./scripts/stop-lab.sh [grfics|labshock|all]
 
 # Restart (keeps data)
-./scripts/start-lab.sh restart [grfics|labshock|all] [--siem] [--armis]
+./scripts/start-lab.sh restart [grfics|labshock|all] [--siem]
 
 # Reset — wipe all volumes and start fresh
-./scripts/start-lab.sh reset [grfics|labshock|all] [--siem] [--armis]
+./scripts/start-lab.sh reset [grfics|labshock|all] [--siem]
 
 # Stop and wipe volumes only (no restart)
 ./scripts/stop-lab.sh [grfics|labshock|all] --wipe
 ```
 
-**What `--wipe` clears:** ScadaLTS historian DB, PLC state, router config, Armis PCAPs/flow stats, Wazuh indexes, Labshock portal data, Armis VM UEFI state. Does **not** delete the Armis QCOW2 image.
-
----
-
-## Armis Integration
-
-The Armis vSensor collector VM receives a tc-mirrored copy of all ICS/DMZ traffic from the router and sends it to `lab-kudelski.armis.com` for cloud analysis.
-
-```bash
-# One-time setup
-./scripts/armis-setup.sh --api-key "your-api-token"
-
-# Start lab with Armis
-source .env.armis
-./scripts/start-lab.sh grfics --armis
-
-# Start collector VM (required after host reboot)
-./scripts/armis-collector-setup.sh
-
-# Restart collector VM only
-./scripts/armis-collector-setup.sh --restart
-```
-
-**Collector VM details:**
-- Web UI: https://localhost:18443 (`config` / `Armis`)
-- Collector ID: 8156 — Tenant: lab-kudelski.armis.com
-- SPAN mirrors on router are re-applied automatically by `start-lab.sh --armis`
+**What `--wipe` clears:** ScadaLTS historian DB, PLC state, router config, Wazuh indexes, Labshock portal data.
 
 ---
 
@@ -170,20 +130,6 @@ open http://localhost:8888   # red / fortiphyd-red
 docker exec kali mbpoll -a 1 -t 0 -1 192.168.95.2 1
 ```
 
-### span-test.py — Armis SPAN Verification
-
-Generates Modbus traffic across multiple function codes (FC01–FC16 + a 30-cycle burst) to confirm the Armis collector is capturing traffic via the SPAN mirror.
-
-```bash
-# Run inside the kali container (scripts are mounted at /opt/lab-scripts/)
-docker exec kali python3 /opt/lab-scripts/span-test.py
-
-# Or pipe from the host without entering the container
-docker exec -i kali python3 - < scripts/span-test.py
-```
-
-After the script completes, check **Armis portal → Collector → Span Statistics** for a rising unicast count. Devices should appear in the portal within 1–2 minutes.
-
 ---
 
 ## Azure Deployment
@@ -193,7 +139,7 @@ A self-contained Azure deployment package is in [ot-lab_azure/](ot-lab_azure/). 
 - **Bicep template** — single-VM deployment (Ubuntu 22.04, nested-virt capable D-series)
 - **cloud-init** — bootstraps Docker, QEMU/KVM, and OVMF at first boot
 - **Azure network override** — uses Docker `bridge` instead of `macvlan` (Azure hypervisors drop macvlan subinterface traffic)
-- **Scripts** — all lab scripts with credentials stripped (supplied via `.env.armis`)
+- **Scripts** — all lab scripts with credentials stripped
 - No Wazuh/SIEM in the Azure package
 
 ```bash
