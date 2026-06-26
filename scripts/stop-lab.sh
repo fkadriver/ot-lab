@@ -2,8 +2,6 @@
 # stop-lab.sh - Stop OT lab modules (interactive or CLI)
 set -e
 
-if [[ $EUID -ne 0 ]]; then exec sudo -E "$0" "$@"; fi
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 WIPE=0

@@ -2,8 +2,6 @@
 # start-lab.sh - Start OT lab modules (interactive or CLI)
 set -e
 
-if [[ $EUID -ne 0 ]]; then exec sudo -E "$0" "$@"; fi
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 
@@ -18,7 +16,7 @@ set_map_count() {
     current=$(cat /proc/sys/vm/max_map_count 2>/dev/null || echo 0)
     if [[ $current -lt 262144 ]]; then
         echo "[*] Setting vm.max_map_count=262144 (required by OpenSearch)..."
-        sysctl -w vm.max_map_count=262144
+        sudo sysctl -w vm.max_map_count=262144
     fi
 }
 
@@ -70,7 +68,7 @@ fix_timezone_file() {
         local tz
         tz=$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||')
         echo "[*] /etc/timezone is a directory — replacing with file (${tz:-UTC})..."
-        rmdir /etc/timezone 2>/dev/null && echo "${tz:-UTC}" > /etc/timezone
+        sudo rmdir /etc/timezone 2>/dev/null && echo "${tz:-UTC}" | sudo tee /etc/timezone >/dev/null
     fi
 }
 
