@@ -156,41 +156,41 @@ Low-interaction ICS honeypot emulating a Siemens S7-300 PLC and Simatic HMI by d
 ```bash
 git clone --recursive https://github.com/fkadriver/ot-lab
 cd ot-lab
-
-# Interactive launcher — select modules from a menu
 ./lab.sh
-
-# Or start specific components directly
-./scripts/start-lab.sh grfics
-./scripts/start-lab.sh grfics --siem
-./scripts/start-lab.sh all --siem
 ```
+
+If [direnv](https://direnv.net) is installed, run `direnv allow` once after cloning — the lab menu will be available as `lab.sh` from anywhere inside the project directory.
 
 ---
 
 ## Lab Management
 
+`lab.sh` is the top-level menu. It provides access to all scripts:
+
+| Option | Script | Description |
+|---|---|---|
+| Status | `scripts/status-lab.sh` | Running/stopped state of every module with service URLs |
+| Start | `scripts/start-lab.sh` | Interactive module selector; also accepts CLI args |
+| Stop | `scripts/stop-lab.sh` | Interactive module selector; also accepts CLI args |
+| Update | `scripts/update-lab.sh` | Pull latest repo + advance all submodule pins |
+
+**CLI usage (bypass the menu):**
+
 ```bash
-# Update repo and all submodules to latest
-./scripts/update-lab.sh
+# Start specific modules
+./scripts/start-lab.sh grfics --siem
+./scripts/start-lab.sh grfics labshock icssim
 
-# Start
-./scripts/start-lab.sh [grfics|labshock|all] [--siem]
+# Stop specific modules (or all, optionally wiping volumes)
+./scripts/stop-lab.sh grfics
+./scripts/stop-lab.sh all --wipe
 
-# Stop (keeps all data)
-./scripts/stop-lab.sh [grfics|labshock|all]
-
-# Restart (keeps data)
-./scripts/start-lab.sh restart [grfics|labshock|all] [--siem]
-
-# Reset — wipe all volumes and start fresh
-./scripts/start-lab.sh reset [grfics|labshock|all] [--siem]
-
-# Stop and wipe volumes only (no restart)
-./scripts/stop-lab.sh [grfics|labshock|all] --wipe
+# Restart / reset
+./scripts/start-lab.sh restart grfics
+./scripts/start-lab.sh reset all --siem
 ```
 
-**What `--wipe` clears:** ScadaLTS historian DB, PLC state, router config, Wazuh indexes, Labshock portal data.
+**What `--wipe` clears:** ScadaLTS historian DB, PLC state, router config, Wazuh indexes, and all other module volumes.
 
 ---
 
