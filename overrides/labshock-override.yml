@@ -1,0 +1,16 @@
+# labshock-override.yml — start all Labshock devices including the IT/security stack.
+# Merged with labshock/oilsprings/docker-compose.yml; removes profile gates on the
+# optional Splunk and ELK services so they start alongside every other device.
+
+services:
+  it-splunk:
+    profiles: []
+
+  elasticsearch:
+    profiles: []
+
+  kibana:
+    profiles: []
+
+  logstash:
+    profiles: []

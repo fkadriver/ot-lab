@@ -21,10 +21,13 @@ stop_grfics() {
 }
 
 stop_labshock() {
-    [[ -f "$LAB_DIR/labshock/docker-compose.yml" ]] || { echo "[-] Labshock not initialised, skipping"; return; }
+    [[ -f "$LAB_DIR/labshock/oilsprings/docker-compose.yml" ]] || { echo "[-] Labshock not initialised, skipping"; return; }
     echo "[*] Stopping Labshock..."
     local flags=""; [[ $WIPE -eq 1 ]] && flags="-v"
-    (cd "$LAB_DIR/labshock" && docker compose down $flags)
+    (cd "$LAB_DIR/labshock" && docker compose \
+        -f oilsprings/docker-compose.yml \
+        -f "$LAB_DIR/overrides/labshock-override.yml" \
+        down $flags)
     echo "[-] Labshock stopped"
 }
 

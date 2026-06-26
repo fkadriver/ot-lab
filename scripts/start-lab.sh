@@ -55,9 +55,26 @@ start_grfics() {
 
 start_labshock() {
     ensure_submodule labshock "$LAB_DIR/labshock"
-    echo "[*] Starting Labshock..."
-    (cd "$LAB_DIR/labshock" && docker compose up -d)
-    echo "[+] Labshock ready — check 'docker logs labshock' for portal URL"
+    echo "[*] Starting Labshock (all devices)..."
+    (cd "$LAB_DIR/labshock" && docker compose \
+        -f oilsprings/docker-compose.yml \
+        -f "$LAB_DIR/overrides/labshock-override.yml" \
+        up -d --build)
+    echo "[+] Labshock ready"
+    echo "    Portal:            https://localhost:443"
+    echo "    Router dashboard:  http://localhost:1444"
+    echo "    OpenPLC (PLC):     http://localhost:8080"
+    echo "    SCADA (Node-RED):  http://localhost:1881"
+    echo "    EWS (VNC):         http://localhost:5911"
+    echo "    IDS console:       https://localhost:1443"
+    echo "    Collector:         https://localhost:2443"
+    echo "    Pentest:           https://localhost:3443  (SSH :2222)"
+    echo "    DMZ Router:        https://localhost:5443"
+    echo "    DMZ Collector:     https://localhost:6443"
+    echo "    DMZ Transfer:      https://localhost:4443"
+    echo "    DMZ Pentest:       https://localhost:7443  (SSH :3222)"
+    echo "    Splunk:            https://localhost:8443  (admin / labshock)"
+    echo "    Kibana:            https://localhost:9443"
     echo "    Protocols: Modbus RTU/TCP · S7comm · EtherNet/IP · BACnet · OPC UA · MQTT"
 }
 

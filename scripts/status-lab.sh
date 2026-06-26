@@ -66,8 +66,8 @@ echo -e "$STATUS        http://localhost:5601"
 
 # Labshock
 printf "  %-20s " "Labshock"
-STATUS=$(module_status "labshock" 1)
-echo -e "$STATUS        Modbus · S7 · EtherNet/IP · BACnet · OPC UA · MQTT"
+STATUS=$(module_status "labshock" 8)
+echo -e "$STATUS        :443 portal · :8080 PLC · :1881 SCADA · :1443 IDS · :8443 Splunk"
 
 # ICSSIM
 printf "  %-20s " "ICSSIM"
