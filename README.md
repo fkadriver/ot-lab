@@ -6,28 +6,44 @@ A personal OT/ICS security lab for testing and evaluating cybersecurity tools ag
 
 ## Architecture
 
+All modules run as independent Docker Compose stacks and are launched via `./lab.sh`.
+
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                          Host Machine                           │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                   GRFICSv3 (Docker)                     │   │
-│  │                                                         │   │
-│  │  OpenPLC ── Simulation ── ScadaLTS ── Engineering WS   │   │
-│  │      │           │                                      │   │
-│  │  ICS Net (192.168.95.0/24)   DMZ Net (192.168.90.0/24) │   │
-│  │      └───────── Router ────────── Kali + Caldera ───┘  │   │
-│  │                    │                                    │   │
-│  │            Admin Bridge (172.18.0.0/16)                │   │
-│  │                    │                                    │   │
-│  │          Wazuh SIEM (optional --siem)                  │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              Labshock (Docker, optional)                  │  │
-│  │   Multi-protocol SCADA: Modbus/S7/OPC-UA/BACnet/MQTT    │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                            Host Machine                              │
+│                                                                      │
+│  ── Process Simulations ──────────────────────────────────────────  │
+│                                                                      │
+│  GRFICSv3     Tennessee Eastman chemical plant                       │
+│               OpenPLC · ScadaLTS · Caldera C2 · Kali                │
+│               ICS Net 192.168.95.0/24 · DMZ Net 192.168.90.0/24     │
+│               Router w/ Suricata IDS · Wazuh SIEM (optional)        │
+│                                                                      │
+│  Labshock     Multi-protocol SCADA breadth                           │
+│               Modbus RTU/TCP · S7comm · EtherNet/IP · BACnet ·      │
+│               OPC UA · MQTT                                          │
+│                                                                      │
+│  ICSSIM       Bottle-filling factory (Modbus TCP)                    │
+│                                                                      │
+│  ICSsVirtual  Wastewater treatment plant                             │
+│               OpenPLC · ScadaLTS · attacker container                │
+│                                                                      │
+│  RangerDanger Electric substation segmentation training              │
+│               DNP3 · Modbus · OpenDSS power-flow · IEC 62443 zones  │
+│               containd NGFW built-in                                 │
+│                                                                      │
+│  ── Security Tools ───────────────────────────────────────────────  │
+│                                                                      │
+│  containd     ICS-aware NGFW — zone-based firewalling w/ DPI        │
+│               Modbus · DNP3 · CIP · S7comm · IEC 61850 · BACnet     │
+│                                                                      │
+│  Malcolm      OT SOC/NSM — Zeek · Suricata · OpenSearch · Arkime    │
+│               Native ICS protocol decoders, PCAP analysis           │
+│                                                                      │
+│  Conpot       ICS/SCADA honeypot                                     │
+│               Modbus · S7comm · BACnet · IEC 60870-5-104 · ENIP     │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -60,6 +76,79 @@ Simulates a Tennessee Eastman chemical process with a full ICS stack:
 **Protocols:** Modbus RTU/TCP, S7comm, EtherNet/IP, BACnet IP, OPC UA, MQTT
 
 Broader protocol coverage than GRFICSv3. Trial mode limits sessions to 40 minutes.
+
+### ICSSIM — Bottle-Filling Factory
+
+**Repo:** https://github.com/AlirezaDehlaghi/ICSSIM  
+**Protocols:** Modbus TCP
+
+Extensible ICS testbed framework with a bottle-filling factory as the reference scenario. Designed for reproducible cybersecurity experiments — process topology is defined via config.
+
+### ICSsVirtual — Wastewater Treatment Plant
+
+**Repo:** https://github.com/sfl0r3nz05/ICSsVirtualForCiberSec  
+**Protocols:** Modbus TCP
+
+Wastewater treatment plant simulation with OpenPLC, ScadaLTS HMI, a physical process simulator, and a built-in attacker container. Supports GNS3 for realistic network topology.
+
+### RangerDanger — Electric Substation Training
+
+**Repo:** https://github.com/tonylturner/rangerdanger  
+**Protocols:** DNP3 TCP, Modbus TCP
+
+Hands-on substation segmentation training platform with a web-based topology console, structured lab exercises, and an OpenDSS power-flow simulator that models real electrical consequences of attacks (breaker trips, voltage changes). Built around IEC 62443 security zones. Includes containd as its built-in NGFW.
+
+| Service | URL |
+|---|---|
+| Topology console | http://localhost:8088 |
+| Backend API | http://localhost:9080 |
+| containd NGFW | https://localhost:9443 |
+
+Requires 16 GB RAM minimum. First run: `cd rangerdanger && ./setup.sh`
+
+### containd — ICS-Aware NGFW
+
+**Repo:** https://github.com/tonylturner/containd
+
+Zone-based next-generation firewall purpose-built for ICS/OT network segmentation. Deep packet inspection down to function-code level for Modbus, DNP3, CIP/EtherNet-IP, S7comm, IEC 61850, BACnet, and OPC UA. Learn-then-enforce workflow; default-deny posture. Also included within RangerDanger.
+
+| Service | URL |
+|---|---|
+| Web UI | http://localhost:8080 |
+| SSH console | localhost:2222 |
+
+### Malcolm — OT SOC/NSM
+
+**Repo:** https://github.com/cisagov/Malcolm  
+**Maintainer:** CISA / Idaho National Laboratory
+
+Full network traffic analysis suite for ICS/OT environments: Zeek, Suricata, OpenSearch Dashboards, and Arkime packet capture. Native decoders for 20+ ICS protocols. Pairs with any simulation module to provide a blue-team SOC layer.
+
+| Service | URL |
+|---|---|
+| OpenSearch Dashboards | https://localhost |
+| Arkime packet capture | https://localhost:8005 |
+| File upload | https://localhost:8443 |
+
+**First-run setup required:**
+```bash
+cd malcolm && python3 scripts/install.py
+touch .configured
+```
+
+### Conpot — ICS/SCADA Honeypot
+
+**Repo:** https://github.com/mushorg/conpot
+
+Low-interaction ICS honeypot emulating a Siemens S7-300 PLC and Simatic HMI by default. Broad protocol coverage in a single container — useful for deception, detection testing, and protocol fuzzing.
+
+| Protocol | Port |
+|---|---|
+| Modbus | 502 |
+| S7comm | 102 |
+| HTTP | 80 |
+| BACnet | 47808 |
+| IEC 60870-5-104 | 2404 |
 
 ---
 
@@ -157,6 +246,12 @@ See [ot-lab_azure/README.md](ot-lab_azure/README.md) for full deployment steps.
 
 - [GRFICSv3](https://github.com/Fortiphyd/GRFICSv3)
 - [Labshock](https://github.com/zakharb/labshock)
+- [ICSSIM](https://github.com/AlirezaDehlaghi/ICSSIM)
+- [ICSsVirtualForCiberSec](https://github.com/sfl0r3nz05/ICSsVirtualForCiberSec)
+- [RangerDanger](https://github.com/tonylturner/rangerdanger)
+- [containd](https://github.com/tonylturner/containd)
+- [Malcolm](https://github.com/cisagov/Malcolm)
+- [Conpot](https://github.com/mushorg/conpot)
 - [MITRE ATT&CK for ICS](https://attack.mitre.org/matrices/ics/)
 - [Wazuh Documentation](https://documentation.wazuh.com/)
 - [DigitalBond Quickdraw Rules](https://github.com/digitalbond/Quickdraw-Snort)
