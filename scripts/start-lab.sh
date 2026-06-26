@@ -109,18 +109,31 @@ start_conpot() {
     echo "    Modbus :502 · S7comm :102 · HTTP :80 · BACnet :47808 · IEC-104 :2404"
 }
 
+malcolm_python() {
+    # NixOS ships python3-minimal without _ssl; use nix-shell when available
+    # to get a full Python with the packages Malcolm's scripts need.
+    if command -v nix-shell >/dev/null 2>&1; then
+        nix-shell -p python3 \
+            -p python3Packages.requests \
+            -p python3Packages.ruamel-yaml \
+            -p python3Packages.python-dotenv \
+            --run "python3 $*"
+    else
+        python3 "$@"
+    fi
+}
+
 start_malcolm() {
     ensure_submodule malcolm "$LAB_DIR/malcolm"
     set_map_count
     if [[ ! -f "$LAB_DIR/malcolm/.configured" ]]; then
-        echo ""
-        echo "    [!] Malcolm requires first-run configuration:"
-        echo "        cd malcolm && python3 scripts/install.py && touch .configured"
-        echo ""
-        return 1
+        echo "[*] Malcolm not yet configured — running first-time install (non-interactive defaults)..."
+        (cd "$LAB_DIR/malcolm" && malcolm_python scripts/install.py --non-interactive --defaults --configure)
+        touch "$LAB_DIR/malcolm/.configured"
+        echo "[+] Malcolm configured"
     fi
     echo "[*] Starting Malcolm (OT SOC/NSM)..."
-    (cd "$LAB_DIR/malcolm" && python3 scripts/start)
+    (cd "$LAB_DIR/malcolm" && malcolm_python scripts/start)
     echo "[+] Malcolm ready"
     echo "    OpenSearch Dashboards  https://localhost"
     echo "    Arkime packet capture  https://localhost:8005"
@@ -139,10 +152,17 @@ start_rangerdanger() {
 
 start_containd() {
     ensure_submodule containd "$LAB_DIR/containd"
+    local env_file="$LAB_DIR/containd/deploy/.env"
+    if [[ ! -f "$env_file" ]]; then
+        local secret
+        secret=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+        echo "CONTAIND_JWT_SECRET=$secret" > "$env_file"
+        echo "[*] Generated containd JWT secret → deploy/.env"
+    fi
     echo "[*] Starting containd (ICS-aware NGFW)..."
     (cd "$LAB_DIR/containd" && docker compose -f deploy/docker-compose.yml up -d)
     echo "[+] containd ready"
-    echo "    Web UI  http://localhost:8080  SSH :2222"
+    echo "    Web UI  http://localhost:8080  SSH :2222  (containd / containd)"
 }
 
 dispatch() {
